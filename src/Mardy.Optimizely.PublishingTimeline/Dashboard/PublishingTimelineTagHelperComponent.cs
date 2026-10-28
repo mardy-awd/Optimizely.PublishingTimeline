@@ -45,11 +45,40 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
             || value.EndsWith("/Dashboard/Index", StringComparison.OrdinalIgnoreCase);
     }
 
+    // The Shell layout sets body { display: flex; flex-flow: row; overflow: hidden } and
+    // #root { flex: 1 }, so any body-level sibling of #root ends up in the same horizontal
+    // flex row (to the right, causing #root to shrink). Two rules fix this:
+    //
+    //   1. position: absolute removes our element from the flex algorithm entirely,
+    //      so #root reclaims its full flex: 1 width.
+    //
+    //   2. body:has(...) #root > div shrinks the dashboard scroll area by the panel
+    //      height so gadgets are never hidden behind it. --navigation-height is the
+    //      only Shell CSS variable we need; the sidebar width does not matter because
+    //      left: 0 / right: 0 spans the full viewport (sidebar area at the bottom is
+    //      empty in standard Alloy builds).
+    //
+    //   :has() is used to scope both rules to pages where our element is present.
     private const string PlaceholderHtml =
         """
+        <style>
+          #publishing-timeline-root {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 80px;
+            overflow: hidden;
+            box-sizing: border-box;
+            z-index: 1;
+          }
+          body:has(#publishing-timeline-root) #root > div {
+            height: calc(100vh - var(--navigation-height) - 80px) !important;
+          }
+        </style>
         <div id="publishing-timeline-root"
-             style="margin:1.5rem 2rem 0;padding:1rem 1.5rem;background:#f0f4f8;border:1px solid #c8d6e5;border-radius:4px;font-family:sans-serif;">
-          <h2 style="font-size:1rem;font-weight:600;margin:0 0 .4rem;color:#2c3e50;">
+             style="padding:.75rem 2rem;background:#f0f4f8;border-top:2px solid #c8d6e5;font-family:sans-serif;">
+          <h2 style="font-size:1rem;font-weight:600;margin:0 0 .25rem;color:#2c3e50;">
             Publishing Timeline
           </h2>
           <p style="font-size:.875rem;color:#555;margin:0;">
