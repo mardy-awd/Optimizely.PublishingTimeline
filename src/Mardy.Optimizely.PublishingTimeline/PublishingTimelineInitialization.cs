@@ -2,6 +2,7 @@ using EPiServer.Framework;
 using EPiServer.Framework.Initialization;
 using EPiServer.ServiceLocation;
 using Mardy.Optimizely.PublishingTimeline.Dashboard;
+using Mardy.Optimizely.PublishingTimeline.Services;
 using Microsoft.AspNetCore.Razor.TagHelpers;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -26,6 +27,9 @@ public sealed class PublishingTimelineInitialization : IConfigurableModule
         // Register as ITagHelperComponent so ASP.NET Core's BodyTagHelper automatically
         // invokes it when the Shell shared layout renders its <body> tag.
         context.Services.AddTransient<ITagHelperComponent, PublishingTimelineTagHelperComponent>();
+
+        // Service backing the scheduled-publications API endpoint.
+        context.Services.AddTransient<IScheduledPublicationService, ScheduledPublicationService>();
     }
 
     public void Initialize(InitializationEngine context) { }
