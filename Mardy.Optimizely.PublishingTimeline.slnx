@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Mardy.Optimizely.PublishingTimeline/Mardy.Optimizely.PublishingTimeline.csproj" />
+  </Folder>
+</Solution>
