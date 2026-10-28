@@ -488,3 +488,6 @@ secrets.json
 
 # Local research and proprietary binaries
 research/
+
+# Optimizely NuGet build targets copy vendor module ZIPs here at build time
+**/Modules/_protected/

@@ -247,6 +247,53 @@ the Shell.
 
 ---
 
+## Proof of Concept Implementation
+
+A minimal POC was implemented using the `ITagHelperComponent` + Shell module pattern described above.
+Two files were added to the library; no changes were made to the host application:
+
+| File | Purpose |
+|---|---|
+| `Dashboard/PublishingTimelineTagHelperComponent.cs` | Injects a placeholder `<div>` into the Dashboard `<body>` |
+| `PublishingTimelineInitialization.cs` | Auto-discovered `IConfigurableModule`; registers the tag helper component |
+
+### Verified
+
+**Injection pipeline fires on the Dashboard page.**
+`CmsUIViews/Views/Shared/CommonLayout.cshtml` (in `EPiServer.Shell.UI.dll`) uses ASP.NET Core's
+`BodyTagHelper`, confirmed by the compiled class name
+`Microsoft_AspNetCore_Mvc_Razor_TagHelpers_BodyTagHelper` in the assembly binary. Any
+`ITagHelperComponent` registered in DI is therefore invoked on every CMS shell page, including
+the Dashboard. The placeholder HTML was visible on `localhost:5000/Optimizely/CMS/dashboard`.
+
+**Route detection is scoped correctly.**
+The component checks that `HttpRequest.Path` ends with `/Dashboard` (case-insensitive). The
+placeholder was absent on Edit, Admin, Reports, and Settings pages.
+
+**Auto-discovery works without host-application changes.**
+`PublishingTimelineInitialization` carries `[InitializableModule]` and is found automatically by
+Optimizely's module scanner from the library assembly. No `services.Add*` call is needed in the
+host application.
+
+### Unresolved
+
+**Positioning: the injected element is a sibling of `#root`, not below the gadget grid.**
+The `PostContent` of the `<body>` tag appends HTML as a direct child of `<body>`, alongside
+the `#root` element that the React dashboard mounts into. The Shell layout applies flexbox or
+grid CSS to the body's children, which positions the injected `<div>` in the remaining
+horizontal space next to the React content — visible in the top-right of the content area rather
+than below the last gadget row.
+
+This is a CSS layout constraint of the Shell, not a failure of the injection mechanism. Resolving
+it requires either:
+- wrapping the injected element in a block that breaks out of the flex row (e.g. `width: 100%;
+  flex-basis: 100%`), or
+- identifying a more specific DOM anchor inside the shell layout to target.
+
+This will be addressed in the next implementation iteration.
+
+---
+
 ## Future Investigation
 
 If Optimizely introduces an official Dashboard gadget registration API — such as a JavaScript
