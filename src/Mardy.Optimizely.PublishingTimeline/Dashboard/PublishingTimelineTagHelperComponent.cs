@@ -45,27 +45,34 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
             || value.EndsWith("/Dashboard/Index", StringComparison.OrdinalIgnoreCase);
     }
 
-    // The Shell layout sets body { display: flex; flex-flow: row; overflow: hidden } and
-    // #root { flex: 1 }, so any body-level sibling of #root ends up in the same horizontal
-    // flex row (to the right, causing #root to shrink). Two rules fix this:
+    // Layout strategy — three moving parts:
     //
-    //   1. position: absolute removes our element from the flex algorithm entirely,
-    //      so #root reclaims its full flex: 1 width.
+    //   CSS  1. position: absolute removes our panel from the Shell's horizontal flex
+    //           row, so #root reclaims its full flex: 1 width.
     //
-    //   2. body:has(...) #root > div shrinks the dashboard scroll area by the panel
-    //      height so gadgets are never hidden behind it. --navigation-height is the
-    //      only Shell CSS variable we need; the sidebar width does not matter because
-    //      left: 0 / right: 0 spans the full viewport (sidebar area at the bottom is
-    //      empty in standard Alloy builds).
+    //   CSS  2. body:has(...) #root > div shrinks the scrollable dashboard area by the
+    //           panel height so built-in gadgets are never hidden behind it.
     //
-    //   :has() is used to scope both rules to pages where our element is present.
+    //   CSS  3. left: var(--publishing-timeline-left, 0) aligns the panel's left edge
+    //           with the content area. The variable is set by the inline script below.
+    //           Fallback 0 = full-width, which is safe if the variable is not set.
+    //
+    //   JS   4. An inline MutationObserver waits for #sideBarNavigationRoot, which is
+    //           inserted dynamically by the Shell navigation JS bundle (not server-
+    //           rendered), so it does not exist when our script first runs. Once found,
+    //           getBoundingClientRect().right gives the sidebar's right edge (= the
+    //           content area's left edge). A ResizeObserver keeps the variable current
+    //           when the sidebar collapses, expands, or the window resizes.
+    //
+    //   Both IDs (#sideBarNavigationRoot, #root) are stable: Optimizely's own shipped
+    //   CSS and JS reference them by these exact names.
     private const string PlaceholderHtml =
         """
         <style>
           #publishing-timeline-root {
             position: absolute;
             bottom: 0;
-            left: 0;
+            left: var(--publishing-timeline-left, 0);
             right: 0;
             height: 80px;
             overflow: hidden;
@@ -85,5 +92,34 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
             Scheduled publications will appear here. (POC placeholder)
           </p>
         </div>
+        <script>
+        (function () {
+          var PROP = '--publishing-timeline-left';
+
+          function update(sidebar) {
+            var right = sidebar.getBoundingClientRect().right;
+            document.documentElement.style.setProperty(PROP, right + 'px');
+          }
+
+          function attach(sidebar) {
+            update(sidebar);
+            new ResizeObserver(function () { update(sidebar); }).observe(sidebar);
+          }
+
+          // #sideBarNavigationRoot is created by the Shell navigation bundle after
+          // the HTML is parsed. Check first in case the bundle has already run, then
+          // fall back to a MutationObserver on document.body's direct children.
+          var existing = document.getElementById('sideBarNavigationRoot');
+          if (existing) {
+            attach(existing);
+          } else {
+            var mo = new MutationObserver(function (_, observer) {
+              var el = document.getElementById('sideBarNavigationRoot');
+              if (el) { observer.disconnect(); attach(el); }
+            });
+            mo.observe(document.body, { childList: true });
+          }
+        }());
+        </script>
         """;
 }
