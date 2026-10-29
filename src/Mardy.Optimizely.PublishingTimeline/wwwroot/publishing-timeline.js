@@ -498,6 +498,12 @@
       }
       html += '</div>';
     }
+    // Complete the final week so every column of the last row has a cell (and
+    // therefore its right/bottom border) — mirrors the leading pad cells.
+    var trailing = (7 - (firstDow + daysInMonth) % 7) % 7;
+    for (var ti = 0; ti < trailing; ti++) {
+      html += '<div class="pt-cal-day pt-cal-day--pad"></div>';
+    }
     html += '</div>';
     return html;
   }

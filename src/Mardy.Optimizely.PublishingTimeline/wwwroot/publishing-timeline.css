@@ -263,11 +263,17 @@ body.pt-collapsed .pt-toolbar {
 }
 
 /* ── Status messages ──────────────────────────────────────────────── */
+/* Mirrors the native dashboard empty state (EmptyState: centred both ways,
+   .soft-quad 32px padding, .muted --fg-secondary). flex: 1 fills the panel
+   below the toolbar, so it stays centred as the panel is resized. */
 .pt-message {
+  flex: 1;
   display: flex;
   align-items: center;
-  height: 100%;
-  padding: 0 2rem;
+  justify-content: center;
+  margin: 0;
+  padding: 32px;
+  text-align: center;
   color: var(--fg-secondary, #484e46);
 }
 
@@ -429,11 +435,17 @@ body.pt-collapsed .pt-toolbar {
   color: var(--fg-default, #202320);
 }
 
-/* Scrollable container for the calendar grid — mirrors .pt-scroll */
+/* Scrollable container for the calendar grid — mirrors .pt-scroll.
+   The grid is inset by the panel's 12px gutter (same as the toolbar and month
+   nav) on the sides and bottom, so the final week's bottom border and the
+   right column's border sit clear of the panel/window edge instead of on its
+   last device pixel. The bottom padding scrolls with the content, keeping the
+   gap visible when scrolled to the end. */
 .pt-cal-scroll {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  padding: 0 12px 12px;
 }
 
 .pt-cal-grid {
