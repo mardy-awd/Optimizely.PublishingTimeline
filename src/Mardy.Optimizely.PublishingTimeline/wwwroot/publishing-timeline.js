@@ -5,6 +5,7 @@
 
   var MOUNT_ID     = 'publishing-timeline-root';
   var API_PATH     = '/publishingtimeline/api/scheduled';
+  var LANG_API     = '/publishingtimeline/api/languages';
   var PAGE_SIZE    = 10;
   var DD_PAGE_SIZE = 20;   // matches FilteringSelect pageSize in TimeZoneScheduleSelector.js
 
@@ -57,6 +58,8 @@
 
   /* ── State ───────────────────────────────────────────────────────── */
 
+  var _languages = [];   // populated from /api/languages before first render
+
   var state = {
     skip:     0,
     take:     PAGE_SIZE,
@@ -65,6 +68,7 @@
     loading:  false,
     error:    null,
     timezone: BROWSER_ZONE,
+    language: '',         // '' = all languages
   };
 
   /* ── General helpers ─────────────────────────────────────────────── */
@@ -294,10 +298,22 @@
 
   /* ── Render ──────────────────────────────────────────────────────── */
 
+  function buildLangOptions() {
+    var html = '<option value="">All languages</option>';
+    for (var i = 0; i < _languages.length; i++) {
+      var lang = _languages[i];
+      var sel  = lang.code === state.language ? ' selected' : '';
+      html += '<option value="' + esc(lang.code) + '"' + sel + '>' + esc(lang.name) + '</option>';
+    }
+    return html;
+  }
+
   function buildToolbar() {
     return (
       '<div class="pt-toolbar">' +
         '<span class="pt-toolbar-title">Publishing Timeline</span>' +
+        '<label class="pt-lang-label" for="pt-lang-select">Language:</label>' +
+        '<select class="pt-lang-select" id="pt-lang-select">' + buildLangOptions() + '</select>' +
         '<label class="pt-tz-label" for="pt-tz-input">Timezone:</label>' +
         '<div class="pt-tz-combo" id="pt-tz-combo">' +
           '<input class="pt-tz-input" id="pt-tz-input" type="text"' +
@@ -375,6 +391,15 @@
   }
 
   function attachListeners(mount) {
+    var langSelect = document.getElementById('pt-lang-select');
+    if (langSelect) {
+      langSelect.addEventListener('change', function () {
+        state.language = langSelect.value;
+        state.skip     = 0;
+        load(mount);
+      });
+    }
+
     var input = document.getElementById('pt-tz-input');
     var arrow = document.getElementById('pt-tz-arrow');
 
@@ -455,7 +480,12 @@
     state.error   = null;
     render(mount);
 
-    fetch(API_PATH + '?skip=' + state.skip + '&take=' + state.take, {
+    var url = API_PATH + '?skip=' + state.skip + '&take=' + state.take;
+    if (state.language) {
+      url += '&language=' + encodeURIComponent(state.language);
+    }
+
+    fetch(url, {
       credentials: 'same-origin',
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
     })
@@ -484,7 +514,15 @@
   function init() {
     var mount = document.getElementById(MOUNT_ID);
     if (!mount) { return; }
-    load(mount);
+
+    fetch(LANG_API, {
+      credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (res) { return res.ok ? res.json() : []; })
+      .then(function (data) { _languages = Array.isArray(data) ? data : []; })
+      .catch(function ()    { _languages = []; })
+      .then(function ()     { load(mount); });
   }
 
   if (document.readyState === 'loading') {

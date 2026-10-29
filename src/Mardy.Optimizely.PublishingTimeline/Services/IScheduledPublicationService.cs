@@ -7,5 +7,5 @@ namespace Mardy.Optimizely.PublishingTimeline.Services;
 /// </summary>
 public interface IScheduledPublicationService
 {
-    PagedResult<ScheduledPublicationDto> GetScheduled(int skip, int take);
+    PagedResult<ScheduledPublicationDto> GetScheduled(int skip, int take, string? language = null);
 }

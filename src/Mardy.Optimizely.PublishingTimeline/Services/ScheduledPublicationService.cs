@@ -59,7 +59,7 @@ internal sealed class ScheduledPublicationService : IScheduledPublicationService
     /// is registered that applies language-scoped permissions.
     /// </para>
     /// </remarks>
-    public PagedResult<ScheduledPublicationDto> GetScheduled(int skip, int take)
+    public PagedResult<ScheduledPublicationDto> GetScheduled(int skip, int take, string? language = null)
     {
         var batchSize = Math.Max(take * 2, MinBatchSize);
 
@@ -97,6 +97,10 @@ internal sealed class ScheduledPublicationService : IScheduledPublicationService
 
                 // ACLs are at content-node level; check is valid for scheduled versions.
                 if (!_accessEvaluator.HasAccess(content, principal, AccessLevel.Read))
+                    continue;
+
+                if (language is not null &&
+                    !string.Equals(version.LanguageBranch, language, StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 // Still consuming the caller's skip window.
