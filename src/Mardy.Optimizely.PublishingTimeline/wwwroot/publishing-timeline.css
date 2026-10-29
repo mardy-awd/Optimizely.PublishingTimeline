@@ -355,7 +355,7 @@
   color: #333;
 }
 
-/* Scrollable container for the grid — mirrors .pt-scroll */
+/* Scrollable container for the calendar grid — mirrors .pt-scroll */
 .pt-cal-scroll {
   flex: 1;
   overflow-y: auto;

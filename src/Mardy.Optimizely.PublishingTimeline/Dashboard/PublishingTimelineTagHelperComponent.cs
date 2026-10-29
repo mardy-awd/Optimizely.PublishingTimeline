@@ -66,10 +66,13 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
 
     // Injected into <body>:
     //
-    //   Layout CSS  — positions the panel at the bottom of the Shell's fixed
-    //                 viewport and shrinks #root > div to make room.
-    //                 Panel height is 200px; expressed as a custom property so a
-    //                 single value controls both the element and the offset.
+    //   Layout CSS  — positions a drag handle and the panel at the bottom of the
+    //                 Shell's fixed viewport; shrinks #root > div to make room.
+    //                 --pt-panel-height is set in px by the split script (CSS
+    //                 carries a 40vh fallback for the render before JS runs).
+    //
+    //   Drag handle — #pt-drag-handle sits between the Dashboard content and the
+    //                 panel; dragging it updates --pt-panel-height on :root.
     //
     //   Mount div   — empty; the JS populates it after fetching the API.
     //
@@ -78,6 +81,9 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
     //                        tracks its right edge via ResizeObserver to keep
     //                        --publishing-timeline-left current on resize/collapse.
     //
+    //   Split script — initialises a 50/50 split at DOMContentLoaded; handles
+    //                  drag and re-clamp on viewport resize.
+    //
     //   Panel script — loaded with defer; runs after DOM parse completes.
     //
     // Note: $$"""...""" (two dollar signs) is used so CSS/JS braces are treated as
@@ -85,7 +91,27 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
     private static readonly string BodyHtml =
         $$"""
         <style>
-          :root { --pt-panel-height: 200px; }
+          :root {
+            /* 40vh fallback — replaced with an exact px value by the split script
+               once navigation height is known at DOMContentLoaded. */
+            --pt-panel-height: 40vh;
+          }
+          /* Drag handle — sits directly above the panel in the absolute stack. */
+          #pt-drag-handle {
+            position: absolute;
+            bottom: var(--pt-panel-height);
+            left: var(--publishing-timeline-left, 0);
+            right: 0;
+            height: 5px;
+            background: #c8d6e5;
+            cursor: ns-resize;
+            z-index: 2;
+            box-sizing: border-box;
+          }
+          #pt-drag-handle:hover,
+          #pt-drag-handle.pt-dragging {
+            background: #357b82;
+          }
           #publishing-timeline-root {
             position: absolute;
             bottom: 0;
@@ -96,13 +122,17 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
             border-top: 2px solid #c8d6e5;
             z-index: 1;
           }
+          /* Shrink the Dashboard content area to accommodate the drag handle (5px)
+             and the panel; the three regions sum to 100vh − navigation-height. */
           body:has(#publishing-timeline-root) #root > div {
-            height: calc(100vh - var(--navigation-height) - var(--pt-panel-height)) !important;
+            height: calc(100vh - var(--navigation-height) - var(--pt-panel-height) - 5px) !important;
           }
         </style>
+        <div id="pt-drag-handle"></div>
         <div id="publishing-timeline-root"></div>
         <script>
         (function () {
+          /* ── Sidebar left-edge tracking (unchanged) ──────────────── */
           var PROP = '--publishing-timeline-left';
           function update(sidebar) {
             document.documentElement.style.setProperty(PROP, sidebar.getBoundingClientRect().right + 'px');
@@ -121,6 +151,77 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
             });
             mo.observe(document.body, { childList: true });
           }
+
+          /* ── Resizable 50/50 split ───────────────────────────────── */
+          var MIN_PX    = 200;   // minimum height for each section in px
+          var HANDLE_PX = 5;     // must match the CSS height of #pt-drag-handle
+          var initialized = false;
+
+          function navPx() {
+            var v = getComputedStyle(document.documentElement)
+                      .getPropertyValue('--navigation-height').trim();
+            return parseFloat(v) || 60;
+          }
+
+          function availPx() {
+            return window.innerHeight - navPx() - HANDLE_PX;
+          }
+
+          function setPanelPx(h) {
+            var clamped = Math.max(MIN_PX, Math.min(Math.round(h), availPx() - MIN_PX));
+            document.documentElement.style.setProperty('--pt-panel-height', clamped + 'px');
+          }
+
+          function initSplit() {
+            initialized = true;
+            setPanelPx(availPx() / 2);
+          }
+
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initSplit);
+          } else {
+            initSplit();
+          }
+
+          /* Drag */
+          var handle    = document.getElementById('pt-drag-handle');
+          var dragging  = false;
+          var dragStartY, dragStartH;
+
+          handle.addEventListener('mousedown', function (e) {
+            dragging   = true;
+            dragStartY = e.clientY;
+            dragStartH = parseFloat(
+              getComputedStyle(document.documentElement).getPropertyValue('--pt-panel-height')
+            );
+            handle.classList.add('pt-dragging');
+            document.body.style.cursor     = 'ns-resize';
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+          });
+
+          document.addEventListener('mousemove', function (e) {
+            if (!dragging) { return; }
+            /* Moving the mouse up (smaller clientY) grows the panel upward. */
+            setPanelPx(dragStartH + (dragStartY - e.clientY));
+          });
+
+          document.addEventListener('mouseup', function () {
+            if (!dragging) { return; }
+            dragging = false;
+            handle.classList.remove('pt-dragging');
+            document.body.style.cursor     = '';
+            document.body.style.userSelect = '';
+          });
+
+          /* Re-clamp on viewport resize without resetting to 50/50. */
+          window.addEventListener('resize', function () {
+            if (!initialized) { return; }
+            var cur = parseFloat(
+              getComputedStyle(document.documentElement).getPropertyValue('--pt-panel-height')
+            );
+            if (!isNaN(cur)) { setPanelPx(cur); }
+          });
         }());
         </script>
         <script src="{{AssetBase}}/publishing-timeline.js" defer></script>
