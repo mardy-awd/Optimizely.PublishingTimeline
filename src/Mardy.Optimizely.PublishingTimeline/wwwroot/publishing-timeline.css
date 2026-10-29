@@ -1,0 +1,133 @@
+/* Publishing Timeline — Dashboard panel styles.
+   All selectors are prefixed with .pt- to avoid collisions with the
+   Optimizely Sleek theme. The outer #publishing-timeline-root element
+   is positioned and sized by the inline <style> in the tag helper. */
+
+/* ── Panel chrome ─────────────────────────────────────────────────── */
+#publishing-timeline-root {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  font-family: "Die Grotesk B", "Helvetica Neue", Arial, sans-serif;
+  font-size: 13px;
+  color: #202320;
+  overflow: hidden;
+}
+
+/* ── Status messages ──────────────────────────────────────────────── */
+.pt-message {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 2rem;
+  color: #555;
+}
+
+.pt-message--error {
+  color: #c0392b;
+}
+
+/* ── Table ────────────────────────────────────────────────────────── */
+.pt-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.pt-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.pt-th,
+.pt-td {
+  padding: 5px 12px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pt-th {
+  background: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+  font-weight: 600;
+  font-size: 12px;
+  color: #444;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.pt-tr:nth-child(even) {
+  background: #fafafa;
+}
+
+.pt-tr:hover {
+  background: #f0f4f8;
+}
+
+.pt-td {
+  border-bottom: 1px solid #eee;
+  color: #333;
+}
+
+/* Column widths */
+.pt-col--name     { width: 40%; }
+.pt-col--language { width: 8%; }
+.pt-col--date     { width: 34%; }
+.pt-col--action   { width: 10%; }
+
+.pt-td--action {
+  padding-right: 1rem;
+  text-align: right;
+}
+
+.pt-link {
+  color: #2271b1;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.pt-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Pagination ───────────────────────────────────────────────────── */
+.pt-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 4px 1rem;
+  border-top: 1px solid #eee;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.pt-page-info {
+  font-size: 12px;
+  color: #666;
+}
+
+.pt-btn {
+  padding: 3px 10px;
+  font-size: 12px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.pt-btn:hover:not(:disabled) {
+  background: #f0f4f8;
+  border-color: #aaa;
+}
+
+.pt-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
