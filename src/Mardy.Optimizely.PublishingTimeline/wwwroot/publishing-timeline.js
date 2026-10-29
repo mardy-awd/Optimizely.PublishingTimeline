@@ -11,7 +11,9 @@
 
   /* ── Timezone helpers (ported from TimeZoneScheduleSelector.js) ─── */
 
-  var PREFERRED = ['Europe/London', 'Africa/Cairo', 'America/New_York', 'Asia/Dubai'];
+  var PREFERRED  = ['Europe/London', 'Africa/Cairo', 'America/New_York', 'Asia/Dubai'];
+  var CAL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
 
   function browserZone() {
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; }
@@ -60,6 +62,9 @@
 
   var _languages = [];   // populated from /api/languages before first render
 
+  // Calendar view state — independent of table pagination state.
+  var cal = { items: [], loading: false, error: null };
+
   var state = {
     skip:     0,
     take:     PAGE_SIZE,
@@ -71,6 +76,9 @@
     language: '',         // '' = all languages
     dateFrom: '',         // YYYY-MM-DD local calendar date, or ''
     dateTo:   '',         // YYYY-MM-DD local calendar date, or ''
+    view:     'table',    // 'table' | 'calendar'
+    calYear:  0,          // displayed calendar year, initialised in init()
+    calMonth: 0,          // displayed calendar month (0-based), initialised in init()
   };
 
   /* ── General helpers ─────────────────────────────────────────────── */
@@ -148,6 +156,37 @@
   // False only when both dates are set and from > to.
   function dateRangeValid() {
     return !state.dateFrom || !state.dateTo || state.dateFrom <= state.dateTo;
+  }
+
+  // Returns {year, month (0-based)} for the current moment in the given timezone.
+  function localYearMonth(tz) {
+    var map = {};
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, year: 'numeric', month: 'numeric',
+    }).formatToParts(new Date()).forEach(function (pt) { map[pt.type] = pt.value; });
+    return { year: +map.year, month: +map.month - 1 };
+  }
+
+  // Converts a UTC ISO string to local date/time parts in the given timezone.
+  // Returns null for unparseable input.
+  function utcToLocalParts(isoStr, tz) {
+    var iso = /Z$|[+-]\d{2}:\d{2}$/.test(isoStr) ? isoStr : isoStr + 'Z';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) { return null; }
+    var map = {};
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+      hour12: false,
+    }).formatToParts(d).forEach(function (pt) { map[pt.type] = pt.value; });
+    return {
+      year:   +map.year,
+      month:  +map.month - 1,
+      day:    +map.day,
+      hour:   +(map.hour === '24' ? '0' : map.hour),
+      minute: +map.minute,
+    };
   }
 
   // Label shown in the plain-text input field.
@@ -333,9 +372,11 @@
     closeDd(false);
     if (value !== state.timezone) {
       state.timezone = value;
-      if (state.dateFrom || state.dateTo) {
-        // Date filters are active — UTC boundaries change with timezone,
-        // so a fresh fetch is required.
+      if (state.view === 'calendar') {
+        // UTC month boundaries (and any date-filter bounds) change with timezone.
+        loadCalendar(mount);
+      } else if (state.dateFrom || state.dateTo) {
+        // Date filters are active — UTC boundaries change with timezone.
         state.skip = 0;
         load(mount);
       } else {
@@ -360,11 +401,15 @@
   }
 
   function buildToolbar() {
+    var tblCls  = 'pt-btn pt-view-btn' + (state.view === 'table'    ? ' pt-view-btn--active' : '');
+    var calCls  = 'pt-btn pt-view-btn' + (state.view === 'calendar' ? ' pt-view-btn--active' : '');
     var fromVal = state.dateFrom ? ' value="' + esc(state.dateFrom) + '"' : '';
     var toVal   = state.dateTo   ? ' value="' + esc(state.dateTo)   + '"' : '';
     return (
       '<div class="pt-toolbar">' +
         '<span class="pt-toolbar-title">Publishing Timeline</span>' +
+        '<button class="' + tblCls + '" id="pt-view-table" type="button">Table</button>' +
+        '<button class="' + calCls + '" id="pt-view-cal"   type="button">Calendar</button>' +
         '<label class="pt-lang-label" for="pt-lang-select">Language:</label>' +
         '<select class="pt-lang-select" id="pt-lang-select">' + buildLangOptions() + '</select>' +
         '<label class="pt-date-label" for="pt-date-from">From:</label>' +
@@ -381,6 +426,162 @@
       '</div>'
     );
   }
+
+  /* ── Calendar rendering ─────────────────────────────────────────── */
+
+  function buildCalendarGrid(year, month, items, tz) {
+    var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    // Build day-of-month → sorted event list.
+    var dayMap = {};
+    for (var i = 0; i < items.length; i++) {
+      var lp = utcToLocalParts(items[i].scheduledAt, tz);
+      if (!lp || lp.year !== year || lp.month !== month) { continue; }
+      if (!dayMap[lp.day]) { dayMap[lp.day] = []; }
+      dayMap[lp.day].push({ item: items[i], hour: lp.hour, minute: lp.minute });
+    }
+    Object.keys(dayMap).forEach(function (d) {
+      dayMap[d].sort(function (a, b) {
+        return (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute);
+      });
+    });
+
+    // Day-of-week of the 1st is a Gregorian calendar property, independent of timezone.
+    var firstDow    = new Date(year, month, 1).getDay();
+    var daysInMonth = new Date(year, month + 1, 0).getDate();
+    var todayParts  = utcToLocalParts(new Date().toISOString(), tz);
+
+    var html = '<div class="pt-cal-grid">';
+
+    for (var h = 0; h < 7; h++) {
+      html += '<div class="pt-cal-dow">' + DAY_NAMES[h] + '</div>';
+    }
+    for (var pi = 0; pi < firstDow; pi++) {
+      html += '<div class="pt-cal-day pt-cal-day--pad"></div>';
+    }
+    for (var day = 1; day <= daysInMonth; day++) {
+      var isToday = todayParts &&
+        todayParts.year === year && todayParts.month === month && todayParts.day === day;
+      html += '<div class="pt-cal-day' + (isToday ? ' pt-cal-day--today' : '') + '">';
+      html += '<span class="pt-cal-day-num">' + day + '</span>';
+      if (dayMap[day]) {
+        html += '<div class="pt-cal-events">';
+        for (var ei = 0; ei < dayMap[day].length; ei++) {
+          var ev  = dayMap[day][ei];
+          var lbl = pad(ev.hour) + ':' + pad(ev.minute) + ' ' + ev.item.name;
+          html += '<a class="pt-cal-event" href="' + esc(editUrl(ev.item)) +
+            '" title="' + esc(lbl) + '">' + esc(lbl) + '</a>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderCalendar(mount) {
+    var toolbar = buildToolbar();
+
+    if (!dateRangeValid()) {
+      mount.innerHTML = toolbar +
+        '<p class="pt-message pt-message--warn">From date must be on or before To date.</p>';
+      attachListeners(mount);
+      return;
+    }
+
+    if (cal.loading) {
+      mount.innerHTML = toolbar + '<p class="pt-message">Loading…</p>';
+      attachListeners(mount);
+      return;
+    }
+
+    if (cal.error) {
+      mount.innerHTML = toolbar +
+        '<p class="pt-message pt-message--error">' +
+        'Unable to load calendar. Please refresh the page.</p>';
+      attachListeners(mount);
+      return;
+    }
+
+    mount.innerHTML =
+      toolbar +
+      '<div class="pt-cal-nav">' +
+        '<button class="pt-btn" id="pt-cal-prev">&#8592; Prev</button>' +
+        '<span class="pt-cal-title">' +
+          esc(CAL_MONTHS[state.calMonth] + ' ' + state.calYear) +
+        '</span>' +
+        '<button class="pt-btn" id="pt-cal-today">Today</button>' +
+        '<button class="pt-btn" id="pt-cal-next">Next &#8594;</button>' +
+      '</div>' +
+      '<div class="pt-cal-scroll">' +
+        buildCalendarGrid(state.calYear, state.calMonth, cal.items, state.timezone) +
+      '</div>';
+
+    attachListeners(mount);
+  }
+
+  // Loads calendar items for the displayed month, intersected with any active
+  // From/To date filter.  Uses take=100 (API max) rather than table PAGE_SIZE.
+  function loadCalendar(mount) {
+    if (!dateRangeValid()) { renderCalendar(mount); return; }
+
+    cal.loading = true;
+    cal.error   = null;
+    renderCalendar(mount);
+
+    var y   = state.calYear;
+    var mo  = state.calMonth;
+    var ny  = mo === 11 ? y + 1 : y;
+    var nmo = mo === 11 ? 0 : mo + 1;
+
+    // Month boundaries in the selected timezone → UTC.
+    var calFrom = localDayStartUtcIso(y + '-' + pad(mo + 1) + '-01', state.timezone);
+    var calTo   = localDayStartUtcIso(ny + '-' + pad(nmo + 1) + '-01', state.timezone);
+
+    // Intersect with the shared date-range filter (ISO string comparison is valid for UTC).
+    var effectiveFrom = calFrom;
+    if (state.dateFrom) {
+      var dfUtc = localDayStartUtcIso(state.dateFrom, state.timezone);
+      if (dfUtc > effectiveFrom) { effectiveFrom = dfUtc; }
+    }
+    var effectiveTo = calTo;
+    if (state.dateTo) {
+      var dtUtc = localDayStartUtcIso(addOneDayIso(state.dateTo), state.timezone);
+      if (dtUtc < effectiveTo) { effectiveTo = dtUtc; }
+    }
+
+    var url = API_PATH + '?skip=0&take=100';
+    if (state.language) {
+      url += '&language=' + encodeURIComponent(state.language);
+    }
+    url += '&from=' + encodeURIComponent(effectiveFrom);
+    url += '&to='   + encodeURIComponent(effectiveTo);
+
+    fetch(url, {
+      credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (res) {
+        if (res.status === 401 || res.status === 403) {
+          throw new Error('Not authorised — please refresh and log in again.');
+        }
+        if (!res.ok) { throw new Error('Server returned ' + res.status); }
+        return res.json();
+      })
+      .then(function (data) {
+        cal.items   = Array.isArray(data.items) ? data.items : [];
+        cal.loading = false;
+        renderCalendar(mount);
+      })
+      .catch(function (err) {
+        cal.loading = false;
+        cal.error   = err.message;
+        renderCalendar(mount);
+      });
+  }
+
+  /* ── Table rendering ─────────────────────────────────────────────── */
 
   function render(mount) {
     var toolbar = buildToolbar();
@@ -455,12 +656,57 @@
   }
 
   function attachListeners(mount) {
+    // ── View toggle ───────────────────────────────────────────────────
+    var tblBtn = document.getElementById('pt-view-table');
+    if (tblBtn) {
+      tblBtn.addEventListener('click', function () {
+        if (state.view !== 'table') { state.view = 'table'; render(mount); }
+      });
+    }
+
+    var calBtn = document.getElementById('pt-view-cal');
+    if (calBtn) {
+      calBtn.addEventListener('click', function () {
+        if (state.view !== 'calendar') { state.view = 'calendar'; loadCalendar(mount); }
+      });
+    }
+
+    // ── Calendar navigation (elements only present in calendar view) ──
+    var calPrev = document.getElementById('pt-cal-prev');
+    if (calPrev) {
+      calPrev.addEventListener('click', function () {
+        if (state.calMonth === 0) { state.calYear--; state.calMonth = 11; }
+        else { state.calMonth--; }
+        loadCalendar(mount);
+      });
+    }
+
+    var calNext = document.getElementById('pt-cal-next');
+    if (calNext) {
+      calNext.addEventListener('click', function () {
+        if (state.calMonth === 11) { state.calYear++; state.calMonth = 0; }
+        else { state.calMonth++; }
+        loadCalendar(mount);
+      });
+    }
+
+    var calToday = document.getElementById('pt-cal-today');
+    if (calToday) {
+      calToday.addEventListener('click', function () {
+        var ym = localYearMonth(state.timezone);
+        state.calYear  = ym.year;
+        state.calMonth = ym.month;
+        loadCalendar(mount);
+      });
+    }
+
+    // ── Shared filters — dispatch on active view ──────────────────────
     var langSelect = document.getElementById('pt-lang-select');
     if (langSelect) {
       langSelect.addEventListener('change', function () {
         state.language = langSelect.value;
-        state.skip     = 0;
-        load(mount);
+        if (state.view === 'calendar') { loadCalendar(mount); }
+        else { state.skip = 0; load(mount); }
       });
     }
 
@@ -469,7 +715,11 @@
       dateFrom.addEventListener('change', function () {
         state.dateFrom = dateFrom.value;
         state.skip     = 0;
-        if (dateRangeValid()) { load(mount); } else { render(mount); }
+        if (dateRangeValid()) {
+          if (state.view === 'calendar') { loadCalendar(mount); } else { load(mount); }
+        } else {
+          if (state.view === 'calendar') { renderCalendar(mount); } else { render(mount); }
+        }
       });
     }
 
@@ -478,7 +728,11 @@
       dateTo.addEventListener('change', function () {
         state.dateTo = dateTo.value;
         state.skip   = 0;
-        if (dateRangeValid()) { load(mount); } else { render(mount); }
+        if (dateRangeValid()) {
+          if (state.view === 'calendar') { loadCalendar(mount); } else { load(mount); }
+        } else {
+          if (state.view === 'calendar') { renderCalendar(mount); } else { render(mount); }
+        }
       });
     }
 
@@ -602,6 +856,10 @@
   function init() {
     var mount = document.getElementById(MOUNT_ID);
     if (!mount) { return; }
+
+    var ym = localYearMonth(state.timezone);
+    state.calYear  = ym.year;
+    state.calMonth = ym.month;
 
     fetch(LANG_API, {
       credentials: 'same-origin',
