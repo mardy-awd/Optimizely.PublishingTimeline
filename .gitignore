@@ -480,11 +480,22 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
 # Local settings and secrets
 appsettings.Development.json
+appsettings.Local.json
+appsettings.*.Local.json
 .env
 .env.*
 secrets.json
+*.key
+*.pem
+
+# Optimizely license files and local CMS data (test sites, LocalDB, blobs)
+License.config
+[Aa]pp_[Dd]ata/
+*.sqlite
+*.sqlite3
 
 # Local research and proprietary binaries
 research/
