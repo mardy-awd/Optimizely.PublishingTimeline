@@ -414,7 +414,10 @@
     var toVal   = state.dateTo   ? ' value="' + esc(state.dateTo)   + '"' : '';
     return (
       '<div class="pt-toolbar">' +
-        '<span class="pt-toolbar-title">Publishing Timeline</span>' +
+        '<div class="pt-toolbar-header">' +
+          '<span class="pt-toolbar-title">Publishing Timeline</span>' +
+        '</div>' +
+        '<div class="pt-toolbar-controls">' +
         '<button class="' + tblCls + '" id="pt-view-table" type="button">Table</button>' +
         '<button class="' + calCls + '" id="pt-view-cal"   type="button">Calendar</button>' +
         '<label class="pt-lang-label" for="pt-lang-select">Language:</label>' +
@@ -429,6 +432,7 @@
             ' autocomplete="off" spellcheck="false"' +
             ' value="' + esc(currentLabel()) + '">' +
           '<button class="pt-tz-arrow" id="pt-tz-arrow" type="button" tabindex="-1">&#9660;</button>' +
+        '</div>' +
         '</div>' +
       '</div>'
     );

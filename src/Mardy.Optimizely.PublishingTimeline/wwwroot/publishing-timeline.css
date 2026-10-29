@@ -1,114 +1,162 @@
 /* Publishing Timeline — Dashboard panel styles.
    All selectors are prefixed with .pt- to avoid collisions with the
    Optimizely Sleek theme. The outer #publishing-timeline-root element
-   is positioned and sized by the inline <style> in the tag helper. */
+   is positioned and sized by the inline <style> in the tag helper.
+
+   Colours, radii, and typography use Axiom design-system tokens
+   (custom properties defined in axiom/styles.css, loaded on every CMS
+   page).  Hardcoded fallbacks resolve to the same light-mode values so
+   the panel degrades gracefully if a token is ever unavailable. */
 
 /* ── Panel chrome ─────────────────────────────────────────────────── */
 #publishing-timeline-root {
   display: flex;
   flex-direction: column;
-  background: #fff;
-  font-family: "Die Grotesk B", "Helvetica Neue", Arial, sans-serif;
-  font-size: 13px;
-  color: #202320;
+  background: var(--bg-default, #fff);
+  font-family: var(--font-family-sans, "Die Grotesk B", Roboto, system-ui, sans-serif);
+  font-size: var(--font-size-md, 0.875rem);
+  color: var(--fg-default, #202320);
   overflow: hidden;
 }
 
 /* ── Toolbar ─────────────────────────────────────────────────────── */
+/* Two rows: header (title) on top, view toggle + filters below.
+   A wrapping row (not flex-direction: column) so that if a cached copy of
+   the older single-row markup is served (assets are not cache-busted), the
+   controls still lay out horizontally instead of stacking and stretching. */
 .pt-toolbar {
   display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-default, #d8e4cb);
+  background: var(--bg-page, #f9fcf8);
+  flex-shrink: 0;
+}
+
+/* Title row always spans the full width, forcing controls onto row 2. */
+.pt-toolbar-header {
+  flex: 0 0 100%;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.pt-toolbar > .pt-toolbar-title {
+  flex: 0 0 100%;
+}
+
+.pt-toolbar-controls {
+  flex: 1 1 100%;
+  display: flex;
+  flex-flow: row nowrap;
   align-items: center;
   gap: 8px;
-  padding: 4px 12px;
-  border-bottom: 1px solid #e0e0e0;
-  background: #f9f9f9;
-  flex-shrink: 0;
+  min-width: 0;
   min-height: 30px;
 }
 
+/* Matches the native CMS card heading: 14px / 600 / 1.5rem. */
 .pt-toolbar-title {
   flex: 1;
-  font-weight: 600;
-  font-size: 12px;
-  color: #333;
+  min-width: 0;
+  font-weight: var(--font-weight-lg, 600);
+  font-size: var(--font-size-md, 0.875rem);
+  line-height: 1.5rem;
+  color: var(--fg-default, #202320);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* Filter labels match the native Dashboard language-filter label
+   (Axiom .oui-dropdown__trigger label, CMS 13.5): sans 12px / 400,
+   line-height 0.875rem, --fg-tertiary. */
 .pt-lang-label,
-.pt-tz-label {
-  font-size: 12px;
-  color: #555;
+.pt-tz-label,
+.pt-date-label {
+  font-family: var(--font-family-sans, "Die Grotesk B", Roboto, system-ui, sans-serif);
+  font-size: var(--font-size-sm, 0.75rem);
+  font-weight: var(--font-weight-sm, 400);
+  line-height: var(--line-height-xs, 0.875rem);
+  color: var(--fg-tertiary, #616755);
   white-space: nowrap;
 }
 
+/* Matches the native CMS language selector: Inter 14px, 34px tall,
+   5px radius, padding 0 30px 0 7px. The 30px right padding reserves
+   room for the custom chevron, so the native arrow is suppressed. */
 .pt-lang-select {
-  font-size: 12px;
-  font-family: inherit;
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  padding: 2px 4px;
-  color: #333;
-  background: #fff;
-  height: 24px;
+  box-sizing: border-box;
+  font-family: Inter, var(--font-family-sans, "Die Grotesk B", Roboto, system-ui, sans-serif);
+  font-size: 14px;
+  border: 1px solid var(--border-control, #a1ac8d);
+  border-radius: 5px;
+  padding: 0 30px 0 7px;
+  color: var(--fg-default, #202320);
+  background-color: var(--bg-default, #fff);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23484e46' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 12px 12px;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  height: 34px;
+  flex-shrink: 0;
+  cursor: pointer;
 }
 
 .pt-lang-select:focus {
   outline: none;
-  border-color: #357b82;
-  box-shadow: 0 0 0 1px #357b82;
-}
-
-.pt-date-label {
-  font-size: 12px;
-  color: #555;
-  white-space: nowrap;
+  border-color: var(--border-focus, #197a94);
+  box-shadow: 0 0 0 1px var(--border-focus, #197a94);
 }
 
 .pt-date-input {
-  font-size: 12px;
+  font-size: var(--font-size-sm, 0.75rem);
   font-family: inherit;
-  border: 1px solid #ccc;
-  border-radius: 3px;
+  border: 1px solid var(--border-control, #a1ac8d);
+  border-radius: var(--border-radius-md, 0.5rem);
   padding: 2px 4px;
-  color: #333;
-  background: #fff;
+  color: var(--fg-default, #202320);
+  background: var(--bg-default, #fff);
   height: 24px;
   width: 130px;
 }
 
 .pt-date-input:focus {
   outline: none;
-  border-color: #357b82;
-  box-shadow: 0 0 0 1px #357b82;
+  border-color: var(--border-focus, #197a94);
+  box-shadow: 0 0 0 1px var(--border-focus, #197a94);
 }
 
-/* Combobox wrapper — teal focus ring matches FilteringSelect in the original add-on */
+/* Combobox wrapper */
 .pt-tz-combo {
   display: flex;
   align-items: stretch;
   width: 260px;
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  background: #fff;
+  border: 1px solid var(--border-control, #a1ac8d);
+  border-radius: var(--border-radius-md, 0.5rem);
+  background: var(--bg-default, #fff);
   overflow: hidden;
 }
 
 .pt-tz-combo:focus-within {
-  border-color: #357b82;
-  box-shadow: 0 0 0 1px #357b82;
+  border-color: var(--border-focus, #197a94);
+  box-shadow: 0 0 0 1px var(--border-focus, #197a94);
 }
 
 .pt-tz-input {
   flex: 1;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--font-size-sm, 0.75rem);
   font-family: inherit;
   border: none;
   outline: none;
   padding: 3px 6px;
-  color: #333;
+  color: var(--fg-default, #202320);
   background: transparent;
 }
 
@@ -116,16 +164,16 @@
   flex-shrink: 0;
   width: 22px;
   border: none;
-  border-left: 1px solid #e0e0e0;
-  background: #f0f0f0;
+  border-left: 1px solid var(--border-default, #d8e4cb);
+  background: var(--bg-page, #f9fcf8);
   cursor: pointer;
   font-size: 11px;
-  color: #555;
+  color: var(--fg-secondary, #484e46);
   line-height: 1;
   padding: 0;
 }
 
-.pt-tz-arrow:hover { background: #e4e4e4; }
+.pt-tz-arrow:hover { background: var(--bg-secondary, #eff5eb); }
 
 /* ── Custom dropdown (appended to <body>, position:fixed) ─────────── */
 /* position:fixed escapes the panel's overflow:hidden so the list is
@@ -133,10 +181,10 @@
 .pt-tz-dropdown {
   position: fixed;
   z-index: 10000;
-  background: #fff;
-  border: 1px solid #357b82;
-  border-radius: 0 0 3px 3px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+  background: var(--bg-default, #fff);
+  border: 1px solid var(--border-focus, #197a94);
+  border-radius: 0 0 var(--border-radius-md, 0.5rem) var(--border-radius-md, 0.5rem);
+  box-shadow: var(--box-shadow-md, 0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1));
   /* display is toggled by JS; position/maxHeight set by positionDd(). */
   display: none;
 }
@@ -151,25 +199,25 @@
 
 .pt-tz-opt {
   padding: 6px 10px;
-  font-size: 12px;
-  color: #202320;
+  font-size: var(--font-size-md, 0.875rem);
+  color: var(--fg-default, #202320);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-family: "Die Grotesk B", "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-family-sans, "Die Grotesk B", Roboto, system-ui, sans-serif);
 }
 
-.pt-tz-opt:hover      { background: #f0f4f8; }
-.pt-tz-opt--on        { background: #e6f4f5; color: #357b82; font-weight: 600; }
-.pt-tz-opt--on:hover  { background: #d8eef0; }
+.pt-tz-opt:hover     { background: var(--bg-default-hovered, #5f931f14); }
+.pt-tz-opt--on       { background: var(--bg-accent-subtle, #eeffd9); color: var(--fg-success-strong, #226b1e); font-weight: var(--font-weight-lg, 600); }
+.pt-tz-opt--on:hover { background: var(--bg-accent-subtle, #eeffd9); }
 
 /* Browser-timezone star via CSS ::after — no character literal in JS or HTML,
    so file encoding cannot corrupt it. */
 .pt-tz-opt--browser::after {
   content: ' \2605';       /* ★ U+2605 */
   margin-left: 5px;
-  color: #357b82;
+  color: var(--border-focus, #197a94);
   font-size: 11px;
   vertical-align: middle;
 }
@@ -179,20 +227,20 @@
 .pt-tz-choices {
   flex-shrink: 0;           /* never compressed by the flex layout */
   padding: 5px 10px;
-  font-size: 12px;
-  color: #357b82;
+  font-size: var(--font-size-md, 0.875rem);
+  color: var(--fg-link-default, #226b1e);
   cursor: pointer;
   font-style: italic;
 }
 
-.pt-tz-choices:hover   { background: #f0f4f8; text-decoration: underline; }
-.pt-tz-prev            { border-bottom: 1px solid #e8e8e8; }
-.pt-tz-more            { border-top:    1px solid #e8e8e8; }
+.pt-tz-choices:hover   { background: var(--bg-default-hovered, #5f931f14); text-decoration: underline; }
+.pt-tz-prev            { border-bottom: 1px solid var(--border-default, #d8e4cb); }
+.pt-tz-more            { border-top:    1px solid var(--border-default, #d8e4cb); }
 
 .pt-tz-no-match {
   padding: 8px 10px;
-  font-size: 12px;
-  color: #888;
+  font-size: var(--font-size-md, 0.875rem);
+  color: var(--fg-disabled, #a1ac8d);
   font-style: italic;
 }
 
@@ -202,7 +250,7 @@
   align-items: center;
   height: 100%;
   padding: 0 2rem;
-  color: #555;
+  color: var(--fg-secondary, #484e46);
 }
 
 .pt-message--error {
@@ -228,7 +276,8 @@
 
 .pt-th,
 .pt-td {
-  padding: 5px 12px;
+  /* 4px top/bottom matches the Axiom non-loose table (calc(spacer * .5) = 4px) */
+  padding: 4px 12px;
   text-align: left;
   white-space: nowrap;
   overflow: hidden;
@@ -236,27 +285,33 @@
 }
 
 .pt-th {
-  background: #f5f5f5;
-  border-bottom: 1px solid #ddd;
-  font-weight: 600;
-  font-size: 12px;
-  color: #444;
+  background: var(--bg-page, #f9fcf8);
+  border-bottom: 1px solid var(--border-default, #d8e4cb);
+  font-weight: var(--font-weight-md, 500);
+  font-size: var(--font-size-sm, 0.75rem);   /* 12px — exact Axiom .table th value */
+  line-height: var(--line-height-sm, 1rem);  /* 16px — Axiom .table th */
+  color: var(--fg-disabled, #a1ac8d);
   position: sticky;
   top: 0;
   z-index: 1;
 }
 
 .pt-tr:nth-child(even) {
-  background: #fafafa;
+  background: var(--bg-page, #f9fcf8);
 }
 
 .pt-tr:hover {
-  background: #f0f4f8;
+  background: var(--table-row-bg-hovered, var(--bg-default-hovered, #5f931f14));
 }
 
 .pt-td {
-  border-bottom: 1px solid #eee;
-  color: #333;
+  border-bottom: 1px solid var(--border-default, #d8e4cb);
+  color: var(--fg-default, #202320);
+  /* 14px body text, line-height 20px — matches Axiom .table tbody td */
+  font-size: var(--font-size-md, 0.875rem);
+  font-weight: var(--font-weight-sm, 400);
+  line-height: var(--line-height-md, 1.25rem);
+  vertical-align: middle;
 }
 
 /* Column widths */
@@ -271,13 +326,13 @@
 }
 
 .pt-link {
-  color: #2271b1;
+  color: var(--fg-link-default, #226b1e);
   text-decoration: none;
-  font-size: 12px;
 }
 
 .pt-link:hover {
   text-decoration: underline;
+  color: var(--fg-link-default-hovered, #123810);
 }
 
 /* ── Pagination ───────────────────────────────────────────────────── */
@@ -287,30 +342,30 @@
   justify-content: flex-end;
   gap: 8px;
   padding: 4px 1rem;
-  border-top: 1px solid #eee;
-  background: #fff;
+  border-top: 1px solid var(--border-default, #d8e4cb);
+  background: var(--bg-default, #fff);
   flex-shrink: 0;
 }
 
 .pt-page-info {
-  font-size: 12px;
-  color: #666;
+  font-size: var(--font-size-md, 0.875rem);
+  color: var(--fg-tertiary, #616755);
 }
 
 .pt-btn {
   padding: 3px 10px;
-  font-size: 12px;
-  border: 1px solid #ccc;
-  border-radius: 3px;
-  background: #fff;
-  color: #333;
+  font-size: var(--font-size-sm, 0.75rem);
+  border: 1px solid var(--border-default, #d8e4cb);
+  border-radius: var(--border-radius-md, 0.5rem);
+  background: var(--bg-default, #fff);
+  color: var(--fg-default, #202320);
   cursor: pointer;
   line-height: 1.4;
 }
 
 .pt-btn:hover:not(:disabled) {
-  background: #f0f4f8;
-  border-color: #aaa;
+  background: var(--bg-default-hovered, #5f931f14);
+  border-color: var(--border-default, #d8e4cb);
 }
 
 .pt-btn:disabled {
@@ -321,19 +376,20 @@
 /* View toggle (Table / Calendar) */
 .pt-view-btn {
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: var(--font-size-md, 0.875rem);
+  font-weight: var(--font-weight-md, 500);
   flex-shrink: 0;
 }
 
 .pt-view-btn--active {
-  background: #357b82;
-  color: #fff;
-  border-color: #357b82;
+  background: var(--border-focus, #197a94);
+  color: var(--fg-light, #fff);
+  border-color: var(--border-focus, #197a94);
 }
 
 .pt-view-btn--active:hover:not(:disabled) {
-  background: #2a6169;
-  border-color: #2a6169;
+  background: var(--blue-700, #01485e);
+  border-color: var(--blue-700, #01485e);
 }
 
 /* ── Calendar ─────────────────────────────────────────────────────── */
@@ -342,17 +398,17 @@
   align-items: center;
   gap: 8px;
   padding: 4px 12px;
-  border-bottom: 1px solid #e0e0e0;
-  background: #f9f9f9;
+  border-bottom: 1px solid var(--border-default, #d8e4cb);
+  background: var(--bg-page, #f9fcf8);
   flex-shrink: 0;
 }
 
 .pt-cal-title {
   flex: 1;
   text-align: center;
-  font-weight: 600;
-  font-size: 13px;
-  color: #333;
+  font-weight: var(--font-weight-lg, 600);
+  font-size: var(--font-size-md, 0.875rem);
+  color: var(--fg-default, #202320);
 }
 
 /* Scrollable container for the calendar grid — mirrors .pt-scroll */
@@ -365,47 +421,47 @@
 .pt-cal-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  border-left: 1px solid #e0e0e0;
-  border-top: 1px solid #e0e0e0;
+  border-left: 1px solid var(--border-default, #d8e4cb);
+  border-top: 1px solid var(--border-default, #d8e4cb);
 }
 
 .pt-cal-dow {
   text-align: center;
-  font-size: 11px;
-  font-weight: 600;
-  color: #666;
+  font-size: var(--font-size-sm, 0.75rem);  /* 12px — matches .table th */
+  font-weight: var(--font-weight-md, 500);
+  color: var(--fg-disabled, #a1ac8d);
   padding: 4px 0;
-  background: #f5f5f5;
-  border-right: 1px solid #e0e0e0;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--bg-page, #f9fcf8);
+  border-right: 1px solid var(--border-default, #d8e4cb);
+  border-bottom: 1px solid var(--border-default, #d8e4cb);
 }
 
 .pt-cal-day {
   min-height: 60px;
-  border-right: 1px solid #e0e0e0;
-  border-bottom: 1px solid #e0e0e0;
+  border-right: 1px solid var(--border-default, #d8e4cb);
+  border-bottom: 1px solid var(--border-default, #d8e4cb);
   padding: 2px 3px;
   overflow: hidden;
 }
 
 .pt-cal-day--pad {
-  background: #fafafa;
+  background: var(--bg-page, #f9fcf8);
 }
 
 .pt-cal-day--today {
-  background: #eaf7f8;
+  background: var(--bg-accent-subtle, #eeffd9);
 }
 
 .pt-cal-day-num {
   display: block;
-  font-size: 11px;
-  font-weight: 600;
-  color: #444;
+  font-size: var(--font-size-xs, 0.625rem);
+  font-weight: var(--font-weight-lg, 600);
+  color: var(--fg-tertiary, #616755);
   line-height: 1.4;
 }
 
 .pt-cal-day--today .pt-cal-day-num {
-  color: #357b82;
+  color: var(--fg-success-strong, #226b1e);
 }
 
 .pt-cal-events {
@@ -417,10 +473,10 @@
 
 .pt-cal-event {
   display: block;
-  font-size: 10px;
-  color: #fff;
-  background: #357b82;
-  border-radius: 2px;
+  font-size: var(--font-size-xs, 0.625rem);
+  color: var(--fg-light, #fff);
+  background: var(--bg-information, #036988);
+  border-radius: var(--border-radius-xs, 0.125rem);
   padding: 1px 3px;
   text-decoration: none;
   white-space: nowrap;
@@ -431,15 +487,15 @@
 }
 
 .pt-cal-event:hover {
-  background: #2a6169;
+  background: var(--blue-700, #01485e);
 }
 
 /* ── Calendar day-overflow: "+N more" button ──────────────────────── */
 .pt-cal-more {
   display: block;
   width: 100%;
-  font-size: 10px;
-  color: #357b82;
+  font-size: var(--font-size-xs, 0.625rem);
+  color: var(--fg-link-default, #226b1e);
   background: none;
   border: none;
   padding: 1px 3px;
@@ -459,17 +515,17 @@
 .pt-cal-popup {
   position: fixed;
   z-index: 10001;
-  background: #fff;
-  border: 1px solid #357b82;
-  border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  background: var(--bg-default, #fff);
+  border: 1px solid var(--border-default, #d8e4cb);
+  border-radius: var(--border-radius-md, 0.5rem);
+  box-shadow: var(--box-shadow-md, 0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1));
   width: 220px;
   max-height: 280px;
   display: none;
   overflow: hidden;
-  font-family: "Die Grotesk B", "Helvetica Neue", Arial, sans-serif;
-  font-size: 12px;
-  color: #202320;
+  font-family: var(--font-family-sans, "Die Grotesk B", Roboto, system-ui, sans-serif);
+  font-size: var(--font-size-sm, 0.75rem);
+  color: var(--fg-default, #202320);
 }
 
 .pt-cal-popup-header {
@@ -477,17 +533,17 @@
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px;
-  background: #357b82;
-  color: #fff;
-  font-weight: 600;
-  font-size: 12px;
+  background: var(--bg-default-inverse, #252825);
+  color: var(--fg-default-inverse, #fff);
+  font-weight: var(--font-weight-lg, 600);
+  font-size: var(--font-size-sm, 0.75rem);
   flex-shrink: 0;
 }
 
 .pt-cal-popup-close {
   background: none;
   border: none;
-  color: #fff;
+  color: var(--fg-default-inverse, #fff);
   cursor: pointer;
   font-size: 16px;
   line-height: 1;
@@ -507,15 +563,16 @@
 .pt-cal-popup-event {
   display: block;
   padding: 5px 10px;
-  font-size: 12px;
-  color: #202320;
+  font-size: var(--font-size-md, 0.875rem);
+  color: var(--fg-default, #202320);
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: var(--line-height-md, 1.25rem);
 }
 
 .pt-cal-popup-event:hover {
-  background: #f0f4f8;
-  color: #357b82;
+  background: var(--bg-default-hovered, #5f931f14);
+  color: var(--fg-link-default, #226b1e);
 }
