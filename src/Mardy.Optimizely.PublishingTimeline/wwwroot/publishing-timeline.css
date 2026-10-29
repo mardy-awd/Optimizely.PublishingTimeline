@@ -57,6 +57,24 @@
   min-height: 30px;
 }
 
+/* Collapse / Expand toggle, right-aligned in the header row. */
+.pt-collapse-btn {
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+/* Collapsed (body.pt-collapsed, toggled by the panel script): only the
+   title bar remains. Panel height and drag-handle visibility are handled
+   by the layout CSS in the tag helper. */
+body.pt-collapsed #publishing-timeline-root > :not(.pt-toolbar),
+body.pt-collapsed .pt-toolbar-controls {
+  display: none;
+}
+
+body.pt-collapsed .pt-toolbar {
+  border-bottom: none;
+}
+
 /* Matches the native CMS card heading: 14px / 600 / 1.5rem. */
 .pt-toolbar-title {
   flex: 1;

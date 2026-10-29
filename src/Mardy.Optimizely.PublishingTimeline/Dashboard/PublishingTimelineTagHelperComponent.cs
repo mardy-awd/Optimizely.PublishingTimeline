@@ -1,5 +1,8 @@
+using System.Net;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Razor.TagHelpers;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Mardy.Optimizely.PublishingTimeline.Dashboard;
 
@@ -15,6 +18,11 @@ namespace Mardy.Optimizely.PublishingTimeline.Dashboard;
 /// Both injections are gated by IsDashboardRoute so no other CMS page is affected.
 /// Static assets are served from /_content/Mardy.Optimizely.PublishingTimeline/
 /// by ASP.NET Core's built-in static web assets middleware (UseStaticFiles).
+///
+/// No Optimizely types are referenced: the Workflow Status configuration is read
+/// client-side from the Dashboard's own #root[data-epi-dashboard-rows] attribute,
+/// so a CMS upgrade that changes Dashboard internals cannot break startup or
+/// page rendering — the panel simply stays hidden.
 /// </summary>
 internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
 {
@@ -39,14 +47,42 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
 
         if (string.Equals(output.TagName, "head", StringComparison.OrdinalIgnoreCase))
         {
-            output.PostContent.AppendHtml(HeadHtml);
+            var cssUrl = VersionedAssetUrl(request, "publishing-timeline.css");
+            output.PostContent.AppendHtml($"""<link rel="stylesheet" href="{cssUrl}">""");
         }
         else if (string.Equals(output.TagName, "body", StringComparison.OrdinalIgnoreCase))
         {
+            var jsUrl = VersionedAssetUrl(request, "publishing-timeline.js");
             output.PostContent.AppendHtml(BodyHtml);
+            output.PostContent.AppendHtml($"""<script src="{jsUrl}" defer></script>""");
         }
 
         return Task.CompletedTask;
+    }
+
+    // Appends ?v=<SHA-256 of the file content> using ASP.NET Core's IFileVersionProvider
+    // (the mechanism behind asp-append-version), so browsers fetch a new URL whenever
+    // the file changes. It resolves files through the host's WebRootFileProvider,
+    // which includes RCL static web assets both from a project reference / NuGet
+    // package in development (static web assets manifest) and from wwwroot/_content
+    // after publish. Hashes are cached and invalidated by a file watcher.
+    // The provider is optional: if it is not registered, or the file cannot be
+    // resolved, the URL is returned unversioned rather than failing the page.
+    private static string VersionedAssetUrl(HttpRequest request, string fileName)
+    {
+        var path = $"{AssetBase}/{fileName}";
+        var versioned = path;
+        try
+        {
+            var provider = request.HttpContext.RequestServices.GetService<IFileVersionProvider>();
+            if (provider is not null)
+                versioned = provider.AddFileVersionToPath(request.PathBase, path);
+        }
+        catch (Exception)
+        {
+            versioned = path;
+        }
+        return WebUtility.HtmlEncode(versioned);
     }
 
     // The CMS Dashboard path always ends with /Dashboard regardless of the configured
@@ -60,41 +96,63 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
             || value.EndsWith("/Dashboard/Index", StringComparison.OrdinalIgnoreCase);
     }
 
-    // Injected into <head>: the panel stylesheet served as an RCL static asset.
-    private static readonly string HeadHtml =
-        $"""<link rel="stylesheet" href="{AssetBase}/publishing-timeline.css">""";
-
-    // Injected into <body>:
+    // Injected into <head>: the panel stylesheet (versioned RCL static asset).
+    //
+    // Injected into <body>: BodyHtml, then the versioned panel <script defer>.
     //
     //   Layout CSS  — positions a drag handle and the panel at the bottom of the
     //                 Shell's fixed viewport; shrinks #root > div to make room.
-    //                 --pt-panel-height is set in px by the split script (CSS
-    //                 carries a 40vh fallback for the render before JS runs).
+    //                 --pt-panel-height is derived in CSS from --pt-panel-ratio
+    //                 (default 0.5 = 50/50) and the viewport, so it needs no JS
+    //                 initialisation and follows viewport resizes.
     //
     //   Drag handle — #pt-drag-handle sits between the Dashboard content and the
-    //                 panel; dragging it updates --pt-panel-height on :root.
+    //                 panel; dragging it updates --pt-panel-ratio on :root.
     //
     //   Mount div   — empty; the JS populates it after fetching the API.
+    //
+    //   Panel state — body classes drive the layout CSS:
+    //                   (none)                    hidden; Dashboard keeps full height
+    //                   pt-visible                expanded; panel + drag handle shown
+    //                   pt-visible pt-collapsed   title bar only; no drag handle
+    //                 pt-visible is set by the tab-tracking script; pt-collapsed by
+    //                 the panel script's Collapse/Expand button. --pt-panel-ratio is
+    //                 never changed by either, so the dragged split is preserved.
+    //
+    //   Tab-tracking script — reads the Workflow Status tab order from
+    //                         #root[data-epi-dashboard-rows], then one
+    //                         MutationObserver on #root (the React app) shows the
+    //                         panel only while the "Scheduled" tab is active.
+    //                         Never touches the native tabs. Fails closed (hidden)
+    //                         when the configuration is missing/invalid/ambiguous.
     //
     //   Positioning script — MutationObserver waits for #sideBarNavigationRoot
     //                        (created dynamically by the navigation bundle) then
     //                        tracks its right edge via ResizeObserver to keep
     //                        --publishing-timeline-left current on resize/collapse.
     //
-    //   Split script — initialises a 50/50 split at DOMContentLoaded; handles
-    //                  drag and re-clamp on viewport resize.
+    //   Split script — handles drag only; converts the dragged height into
+    //                  --pt-panel-ratio (the 50/50 default lives in CSS).
     //
-    //   Panel script — loaded with defer; runs after DOM parse completes.
+    //   Panel script — appended after BodyHtml with a versioned URL; loaded with
+    //                  defer, so it runs after DOM parse completes.
     //
-    // Note: $$"""...""" (two dollar signs) is used so CSS/JS braces are treated as
-    // literal characters and only {{expr}} is treated as an interpolation.
+    // BodyHtml is a plain raw string literal (no interpolation), so CSS/JS braces
+    // are literal characters.
     private static readonly string BodyHtml =
-        $$"""
+        """
         <style>
           :root {
-            /* 40vh fallback — replaced with an exact px value by the split script
-               once navigation height is known at DOMContentLoaded. */
-            --pt-panel-height: 40vh;
+            /* Panel share of the space below the navigation bar (minus the 5px
+               drag handle). 0.5 = the default 50/50 split; dragging updates it.
+               Kept as a ratio so the split follows viewport resizes. Each
+               section keeps at least 200px. */
+            --pt-panel-ratio: 0.5;
+            --pt-panel-height: clamp(200px,
+              calc((100vh - var(--navigation-height) - 5px) * var(--pt-panel-ratio)),
+              calc(100vh - var(--navigation-height) - 5px - 200px));
+            /* Collapsed panel: 2px top border + the toolbar's title row. */
+            --pt-collapsed-height: 40px;
           }
           /* Drag handle — sits directly above the panel in the absolute stack. */
           #pt-drag-handle {
@@ -122,16 +180,146 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
             border-top: 2px solid #c8d6e5;
             z-index: 1;
           }
+          body.pt-collapsed #publishing-timeline-root {
+            height: var(--pt-collapsed-height);
+          }
+          /* Hidden off the Scheduled tab; the handle is also hidden when collapsed. */
+          body:not(.pt-visible) #publishing-timeline-root,
+          body:not(.pt-visible) #pt-drag-handle,
+          body.pt-collapsed #pt-drag-handle {
+            display: none;
+          }
           /* Shrink the Dashboard content area to accommodate the drag handle (5px)
-             and the panel; the three regions sum to 100vh − navigation-height. */
-          body:has(#publishing-timeline-root) #root > div {
+             and the panel; the three regions sum to 100vh − navigation-height.
+             When hidden, no rule applies and the Dashboard keeps its native height. */
+          body.pt-visible #root > div {
             height: calc(100vh - var(--navigation-height) - var(--pt-panel-height) - 5px) !important;
+          }
+          body.pt-visible.pt-collapsed #root > div {
+            height: calc(100vh - var(--navigation-height) - var(--pt-collapsed-height)) !important;
           }
         </style>
         <div id="pt-drag-handle"></div>
         <div id="publishing-timeline-root"></div>
         <script>
         (function () {
+          /* ── Scheduled-tab tracking ──────────────────────────────── */
+          /* Shows the panel (body.pt-visible) only while the Workflow Status
+             gadget's "Scheduled" tab is active. The rendered tabs carry no
+             identifier (Axiom's TabNav.Tab drops tabId), so the tab is located
+             by position in the gadget's settings.versionStatuses — read from
+             the same #root[data-epi-dashboard-rows] JSON the Dashboard renders
+             from (already filtered by the user's gadget permissions). Its
+             selected state is read from aria-selected when present, otherwise
+             from Axiom's is-active class (CMS 13.5 renders no ARIA here).
+             Fails closed (hidden) on missing/invalid/ambiguous configuration
+             or a rendered tab-count mismatch. */
+          var SCHEDULED = 6;          // EPiServer.Core.VersionStatus.DelayedPublish
+          var config    = null;       // { index, count } once read; null = stay hidden
+          var visible   = false;
+          var observer  = null;
+
+          function readScheduledTab(appRoot) {
+            var rows;
+            try { rows = JSON.parse(appRoot.getAttribute('data-epi-dashboard-rows')); }
+            catch (_) { return null; }
+            if (!Array.isArray(rows)) { return null; }
+
+            /* Mirrors the Dashboard bundle: rows[].columns[].gadgets[]; an entry
+               with a gadgets array is a group, otherwise scriptUrl selects the gadget. */
+            var found = [];
+            function visit(gadgets) {
+              if (!Array.isArray(gadgets)) { return; }
+              gadgets.forEach(function (g) {
+                if (!g) { return; }
+                if (Array.isArray(g.gadgets)) { visit(g.gadgets); }
+                else if (g.scriptUrl === 'WorkflowStatusGadget') { found.push(g); }
+              });
+            }
+            rows.forEach(function (row) {
+              ((row && row.columns) || []).forEach(function (col) { visit(col && col.gadgets); });
+            });
+            if (found.length !== 1) { return null; }   // none, or ambiguous
+
+            var statuses = found[0].settings && found[0].settings.versionStatuses;
+            if (!Array.isArray(statuses)) { return null; }
+            var index = -1;
+            for (var i = 0; i < statuses.length; i++) {
+              if (statuses[i] === SCHEDULED || statuses[i] === 'DelayedPublish') {
+                if (index !== -1) { return null; }      // duplicate Scheduled tab
+                index = i;
+              }
+            }
+            return index === -1 ? null : { index: index, count: statuses.length };
+          }
+
+          function scheduledTabActive() {
+            if (!config) { return false; }
+            var gadget = document.querySelector('#root .workflow-status-gadget');
+            if (!gadget) { return false; }
+            var list = gadget.querySelector('[role="tablist"]') ||
+                       gadget.querySelector('.oui-tabs-nav');
+            if (!list) { return false; }
+            var tabs = list.querySelectorAll('[role="tab"]');
+            if (!tabs.length) { tabs = list.querySelectorAll('.oui-tabs-nav__item'); }
+            if (tabs.length !== config.count) { return false; }
+            var tab = tabs[config.index];
+            if (!tab) { return false; }
+            var selected = tab.getAttribute('aria-selected');
+            return selected !== null ? selected === 'true' : tab.classList.contains('is-active');
+          }
+
+          /* Applies DOM changes only when the state actually flips, so the
+             frequent no-op checks cost one querySelector and nothing else.
+             MutationObserver already batches each React commit into a single
+             callback; no extra rAF throttle (rAF is paused in background tabs
+             and a lost frame would stall tracking). */
+          function sync() {
+            var next = scheduledTabActive();
+            if (next === visible) { return; }
+            visible = next;
+            document.body.classList.toggle('pt-visible', visible);
+            if (visible) { document.dispatchEvent(new CustomEvent('pt:visible')); }
+          }
+
+          function observe(appRoot) {
+            /* The configuration is server-rendered with #root; read it once.
+               Without a usable configuration the panel stays hidden and no
+               observer is attached at all. */
+            config = readScheduledTab(appRoot);
+            if (!config) { return; }
+            /* The panel lives outside #root, so its own updates never re-trigger this. */
+            observer = new MutationObserver(sync);
+            observer.observe(appRoot, {
+              subtree: true,
+              childList: true,
+              attributes: true,
+              attributeFilter: ['class', 'aria-selected']
+            });
+            sync();
+          }
+
+          var appRoot = document.getElementById('root');
+          if (appRoot) {
+            observe(appRoot);
+          } else {
+            var waitRoot = new MutationObserver(function (_, mo) {
+              var el = document.getElementById('root');
+              if (el) { mo.disconnect(); observe(el); }
+            });
+            waitRoot.observe(document.body, { childList: true });
+            observer = waitRoot;
+          }
+
+          window.addEventListener('pagehide', function () {
+            if (observer) { observer.disconnect(); observer = null; }
+          });
+          /* Restored from the back/forward cache: resume tracking. */
+          window.addEventListener('pageshow', function (e) {
+            var el = document.getElementById('root');
+            if (e.persisted && !observer && el) { observe(el); }
+          });
+
           /* ── Sidebar left-edge tracking (unchanged) ──────────────── */
           var PROP = '--publishing-timeline-left';
           function update(sidebar) {
@@ -152,48 +340,36 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
             mo.observe(document.body, { childList: true });
           }
 
-          /* ── Resizable 50/50 split ───────────────────────────────── */
-          var MIN_PX    = 200;   // minimum height for each section in px
+          /* ── Resizable split ─────────────────────────────────────── */
+          /* The default 50/50 split and viewport resizes are handled by CSS
+             (--pt-panel-ratio); dragging only converts the new height into a
+             ratio, so the user's proportion survives resizes, tab switches and
+             collapse/expand. */
+          var MIN_PX    = 200;   // must match the clamp() minimum in :root
           var HANDLE_PX = 5;     // must match the CSS height of #pt-drag-handle
-          var initialized = false;
-
-          function navPx() {
-            var v = getComputedStyle(document.documentElement)
-                      .getPropertyValue('--navigation-height').trim();
-            return parseFloat(v) || 60;
-          }
 
           function availPx() {
-            return window.innerHeight - navPx() - HANDLE_PX;
+            var nav = parseFloat(getComputedStyle(document.documentElement)
+                        .getPropertyValue('--navigation-height')) || 0;
+            return window.innerHeight - nav - HANDLE_PX;
           }
 
           function setPanelPx(h) {
-            var clamped = Math.max(MIN_PX, Math.min(Math.round(h), availPx() - MIN_PX));
-            document.documentElement.style.setProperty('--pt-panel-height', clamped + 'px');
-          }
-
-          function initSplit() {
-            initialized = true;
-            setPanelPx(availPx() / 2);
-          }
-
-          if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initSplit);
-          } else {
-            initSplit();
+            var avail   = availPx();
+            var clamped = Math.max(MIN_PX, Math.min(h, avail - MIN_PX));
+            document.documentElement.style.setProperty('--pt-panel-ratio', String(clamped / avail));
           }
 
           /* Drag */
           var handle    = document.getElementById('pt-drag-handle');
+          var panelEl   = document.getElementById('publishing-timeline-root');
           var dragging  = false;
           var dragStartY, dragStartH;
 
           handle.addEventListener('mousedown', function (e) {
             dragging   = true;
             dragStartY = e.clientY;
-            dragStartH = parseFloat(
-              getComputedStyle(document.documentElement).getPropertyValue('--pt-panel-height')
-            );
+            dragStartH = panelEl.getBoundingClientRect().height;
             handle.classList.add('pt-dragging');
             document.body.style.cursor     = 'ns-resize';
             document.body.style.userSelect = 'none';
@@ -213,17 +389,7 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
             document.body.style.cursor     = '';
             document.body.style.userSelect = '';
           });
-
-          /* Re-clamp on viewport resize without resetting to 50/50. */
-          window.addEventListener('resize', function () {
-            if (!initialized) { return; }
-            var cur = parseFloat(
-              getComputedStyle(document.documentElement).getPropertyValue('--pt-panel-height')
-            );
-            if (!isNaN(cur)) { setPanelPx(cur); }
-          });
         }());
         </script>
-        <script src="{{AssetBase}}/publishing-timeline.js" defer></script>
         """;
 }

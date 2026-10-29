@@ -416,6 +416,10 @@
       '<div class="pt-toolbar">' +
         '<div class="pt-toolbar-header">' +
           '<span class="pt-toolbar-title">Publishing Timeline</span>' +
+          '<button class="pt-btn pt-collapse-btn" id="pt-collapse" type="button"' +
+            ' aria-controls="' + MOUNT_ID + '" aria-expanded="' + !isCollapsed() + '">' +
+            (isCollapsed() ? 'Expand' : 'Collapse') +
+          '</button>' +
         '</div>' +
         '<div class="pt-toolbar-controls">' +
         '<button class="' + tblCls + '" id="pt-view-table" type="button">Table</button>' +
@@ -781,6 +785,12 @@
   }
 
   function attachListeners(mount) {
+    // ── Collapse / Expand ─────────────────────────────────────────────
+    var collapseBtn = document.getElementById('pt-collapse');
+    if (collapseBtn) {
+      collapseBtn.addEventListener('click', toggleCollapsed);
+    }
+
     // ── View toggle ───────────────────────────────────────────────────
     var tblBtn = document.getElementById('pt-view-table');
     if (tblBtn) {
@@ -986,6 +996,29 @@
       });
   }
 
+  /* ── Collapse state ──────────────────────────────────────────────── */
+  /* Held as a class on <body> (read by the layout CSS in the tag helper).
+     Session-only: a page load always starts expanded. The toolbar is
+     re-rendered via innerHTML, so the button reads its label from here. */
+
+  function isCollapsed() {
+    return document.body.classList.contains('pt-collapsed');
+  }
+
+  function toggleCollapsed() {
+    var collapsed = document.body.classList.toggle('pt-collapsed');
+    var btn = document.getElementById('pt-collapse');
+    if (btn) {
+      btn.textContent = collapsed ? 'Expand' : 'Collapse';
+      btn.setAttribute('aria-expanded', String(!collapsed));
+    }
+    if (collapsed) {
+      // Floating elements live on <body> and would outlive the hidden content.
+      if (_ddOpen) { closeDd(true); }
+      closeCalPopup();
+    }
+  }
+
   /* ── Bootstrap ───────────────────────────────────────────────────── */
 
   function init() {
@@ -1006,9 +1039,29 @@
       .then(function ()     { load(mount); });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
+  // The panel is only shown on the Workflow Status "Scheduled" tab (see the
+  // tab-tracking script in the tag helper), so defer the first API call until
+  // it is actually shown. The tag helper sets body.pt-visible and fires
+  // 'pt:visible' on document each time the panel becomes visible.
+  var _started = false;
+
+  function start() {
+    if (_started) { return; }
+    _started = true;
     init();
+  }
+
+  function boot() {
+    if (document.body.classList.contains('pt-visible')) {
+      start();
+    } else {
+      document.addEventListener('pt:visible', start, { once: true });
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
   }
 }());
