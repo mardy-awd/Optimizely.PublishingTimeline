@@ -28,6 +28,13 @@
 
   function pad(n) { return String(n).padStart(2, '0'); }
 
+  // Converts pre-computed 24-hour parts to "h:mm AM/PM" (no leading zero).
+  function formatTimeAMPM(hour, minute) {
+    var ampm = hour >= 12 ? 'PM' : 'AM';
+    var h    = hour % 12 || 12;
+    return h + ':' + pad(minute) + ' ' + ampm;
+  }
+
   // Produces "UTC+02:00" — ported verbatim from TimeZoneScheduleSelector.js
   function offsetLabel(date, zone) {
     var part = new Intl.DateTimeFormat('en-US', {
@@ -98,7 +105,7 @@
     try {
       return d.toLocaleString(undefined, {
         year: 'numeric', month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit',
+        hour: 'numeric', minute: '2-digit', hour12: true,
         timeZone: tz, timeZoneName: 'short',
       });
     } catch (_) { return d.toLocaleString(); }
@@ -465,12 +472,19 @@
       html += '<div class="pt-cal-day' + (isToday ? ' pt-cal-day--today' : '') + '">';
       html += '<span class="pt-cal-day-num">' + day + '</span>';
       if (dayMap[day]) {
+        var evs  = dayMap[day];
+        var show = Math.min(evs.length, 3);
         html += '<div class="pt-cal-events">';
-        for (var ei = 0; ei < dayMap[day].length; ei++) {
-          var ev  = dayMap[day][ei];
-          var lbl = pad(ev.hour) + ':' + pad(ev.minute) + ' ' + ev.item.name;
+        for (var ei = 0; ei < show; ei++) {
+          var ev  = evs[ei];
+          var lbl = formatTimeAMPM(ev.hour, ev.minute) + ' ' + ev.item.name;
           html += '<a class="pt-cal-event" href="' + esc(editUrl(ev.item)) +
-            '" title="' + esc(lbl) + '">' + esc(lbl) + '</a>';
+            '" target="_blank" rel="noopener noreferrer"' +
+            ' title="' + esc(lbl) + '">' + esc(lbl) + '</a>';
+        }
+        if (evs.length > 3) {
+          html += '<button class="pt-cal-more" data-day="' + day +
+            '" type="button">+' + (evs.length - 3) + ' more</button>';
         }
         html += '</div>';
       }
@@ -478,6 +492,111 @@
     }
     html += '</div>';
     return html;
+  }
+
+  /* ── Day-events popup ────────────────────────────────────────────── */
+
+  var _calPopup        = null;   // singleton element, created once
+  var _calPopupOpen    = false;
+  var _calPopupEscHdlr = null;
+
+  // Re-derives the sorted event list for `day` from cal.items at popup-open
+  // time so buildCalendarGrid does not need to encode event data in the DOM.
+  function getCalEventsForDay(day) {
+    var result = [];
+    for (var i = 0; i < cal.items.length; i++) {
+      var lp = utcToLocalParts(cal.items[i].scheduledAt, state.timezone);
+      if (lp && lp.year === state.calYear && lp.month === state.calMonth && lp.day === day) {
+        result.push({ item: cal.items[i], hour: lp.hour, minute: lp.minute });
+      }
+    }
+    result.sort(function (a, b) {
+      return (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute);
+    });
+    return result;
+  }
+
+  function createCalPopup() {
+    if (_calPopup) { return; }
+    _calPopup = document.createElement('div');
+    _calPopup.className = 'pt-cal-popup';
+    document.body.appendChild(_calPopup);
+
+    // Single document-level outside-click handler, registered once.
+    // Uses composedPath() for the same reason as the timezone dropdown.
+    document.addEventListener('mousedown', function (e) {
+      if (!_calPopupOpen) { return; }
+      var path = e.composedPath ? e.composedPath() : [];
+      if (path.indexOf(_calPopup) >= 0) { return; }
+      // Let .pt-cal-more buttons manage open/close themselves.
+      if (e.target && e.target.closest && e.target.closest('.pt-cal-more')) { return; }
+      closeCalPopup();
+    });
+  }
+
+  function positionCalPopup(anchor) {
+    if (!_calPopup || !anchor) { return; }
+    var r  = anchor.getBoundingClientRect();
+    var vW = window.innerWidth;
+    var vH = window.innerHeight;
+    var pw = 220;   // matches .pt-cal-popup width in CSS
+
+    var left = r.left;
+    if (left + pw > vW - 8) { left = vW - pw - 8; }
+    if (left < 8)            { left = 8; }
+    _calPopup.style.left = left + 'px';
+
+    // Prefer below the anchor; fall back to above when space is tight.
+    if (vH - r.bottom >= 120) {
+      _calPopup.style.top    = (r.bottom + 4) + 'px';
+      _calPopup.style.bottom = '';
+    } else {
+      _calPopup.style.top    = '';
+      _calPopup.style.bottom = (vH - r.top + 4) + 'px';
+    }
+  }
+
+  function openCalPopup(btn, day) {
+    createCalPopup();
+
+    var evs = getCalEventsForDay(day);
+
+    var html =
+      '<div class="pt-cal-popup-header">' +
+        '<span>' + esc(day + ' ' + CAL_MONTHS[state.calMonth] + ' ' + state.calYear) + '</span>' +
+        '<button class="pt-cal-popup-close" type="button" aria-label="Close">×</button>' +
+      '</div>' +
+      '<div class="pt-cal-popup-list">';
+    for (var i = 0; i < evs.length; i++) {
+      var ev  = evs[i];
+      var lbl = formatTimeAMPM(ev.hour, ev.minute) + ' ' + ev.item.name;
+      html += '<a class="pt-cal-popup-event" href="' + esc(editUrl(ev.item)) +
+        '" target="_blank" rel="noopener noreferrer"' +
+        ' title="' + esc(lbl) + '">' + esc(lbl) + '</a>';
+    }
+    html += '</div>';
+
+    _calPopup.innerHTML    = html;
+    _calPopup.style.display = 'block';
+    _calPopupOpen           = true;
+
+    _calPopup.querySelector('.pt-cal-popup-close')
+      .addEventListener('click', function () { closeCalPopup(); });
+
+    positionCalPopup(btn);
+
+    if (_calPopupEscHdlr) { document.removeEventListener('keydown', _calPopupEscHdlr); }
+    _calPopupEscHdlr = function (e) { if (e.key === 'Escape') { closeCalPopup(); } };
+    document.addEventListener('keydown', _calPopupEscHdlr);
+  }
+
+  function closeCalPopup() {
+    _calPopupOpen = false;
+    if (_calPopup) { _calPopup.style.display = 'none'; }
+    if (_calPopupEscHdlr) {
+      document.removeEventListener('keydown', _calPopupEscHdlr);
+      _calPopupEscHdlr = null;
+    }
   }
 
   function renderCalendar(mount) {
@@ -526,6 +645,7 @@
   function loadCalendar(mount) {
     if (!dateRangeValid()) { renderCalendar(mount); return; }
 
+    closeCalPopup();
     cal.loading = true;
     cal.error   = null;
     renderCalendar(mount);
@@ -621,7 +741,8 @@
           '<td class="pt-td pt-col--language">' + esc(item.language)                           + '</td>' +
           '<td class="pt-td pt-col--date">'     + formatDate(item.scheduledAt, state.timezone)  + '</td>' +
           '<td class="pt-td pt-col--action pt-td--action">' +
-            '<a class="pt-link" href="' + esc(editUrl(item)) + '">Edit</a>' +
+            '<a class="pt-link" href="' + esc(editUrl(item)) +
+            '" target="_blank" rel="noopener noreferrer">Edit</a>' +
           '</td>' +
         '</tr>'
       );
@@ -698,6 +819,16 @@
         state.calMonth = ym.month;
         loadCalendar(mount);
       });
+    }
+
+    // ── Calendar day-overflow popup ───────────────────────────────────
+    var moreBtns = mount.querySelectorAll('.pt-cal-more');
+    for (var mi = 0; mi < moreBtns.length; mi++) {
+      (function (btn) {
+        btn.addEventListener('click', function () {
+          openCalPopup(btn, parseInt(btn.dataset.day, 10));
+        });
+      }(moreBtns[mi]));
     }
 
     // ── Shared filters — dispatch on active view ──────────────────────
