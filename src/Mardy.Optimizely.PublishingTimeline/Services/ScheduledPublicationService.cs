@@ -59,7 +59,12 @@ internal sealed class ScheduledPublicationService : IScheduledPublicationService
     /// is registered that applies language-scoped permissions.
     /// </para>
     /// </remarks>
-    public PagedResult<ScheduledPublicationDto> GetScheduled(int skip, int take, string? language = null)
+    public PagedResult<ScheduledPublicationDto> GetScheduled(
+        int skip,
+        int take,
+        string?   language = null,
+        DateTime? from     = null,
+        DateTime? to       = null)
     {
         var batchSize = Math.Max(take * 2, MinBatchSize);
 
@@ -89,6 +94,12 @@ internal sealed class ScheduledPublicationService : IScheduledPublicationService
 
                 if (version.DelayPublishUntil is null)
                     continue;
+
+                // Date-range filter: applied before TryGet to avoid loading content
+                // for items that fall outside the requested window.
+                var scheduledAt = version.DelayPublishUntil.Value;
+                if (from.HasValue && scheduledAt < from.Value) continue;
+                if (to.HasValue   && scheduledAt >= to.Value)  continue;
 
                 // TryGet with a versioned ContentReference (WorkID > 0) loads the
                 // specific version regardless of language or publish status.

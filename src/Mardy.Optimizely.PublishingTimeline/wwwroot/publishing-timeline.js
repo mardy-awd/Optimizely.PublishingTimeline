@@ -69,6 +69,8 @@
     error:    null,
     timezone: BROWSER_ZONE,
     language: '',         // '' = all languages
+    dateFrom: '',         // YYYY-MM-DD local calendar date, or ''
+    dateTo:   '',         // YYYY-MM-DD local calendar date, or ''
   };
 
   /* ── General helpers ─────────────────────────────────────────────── */
@@ -104,6 +106,48 @@
     return cmsModuleUrl() +
       '/?language=' + encodeURIComponent(item.language) +
       '#context=epi.cms.contentdata:///' + item.contentId + '_' + item.versionId;
+  }
+
+  /* ── Date-range helpers ──────────────────────────────────────────── */
+
+  // Returns the ISO 8601 UTC string for local midnight on dateStr (YYYY-MM-DD) in tz.
+  // Uses noon UTC as the reference point so DST transitions around midnight cannot
+  // produce an incorrect offset for the day being queried.
+  function localDayStartUtcIso(dateStr, tz) {
+    var p   = dateStr.split('-');
+    var y = +p[0], mo = +p[1] - 1, d = +p[2];
+    // noon UTC on that calendar day — safely outside any DST spring-forward gap
+    var ref = new Date(Date.UTC(y, mo, d, 12, 0, 0));
+
+    var map = {};
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false,
+    }).formatToParts(ref).forEach(function (pt) { map[pt.type] = pt.value; });
+
+    var h = parseInt(map.hour === '24' ? '0' : map.hour, 10);
+    var localRefAsUtc = Date.UTC(
+      +map.year, +map.month - 1, +map.day,
+      h, +map.minute, +map.second
+    );
+
+    // UTC_midnight = local_midnight_as_fake_UTC + (UTC_ref − local_ref_as_UTC)
+    var offsetMs     = ref.getTime() - localRefAsUtc;
+    var midnightFake = Date.UTC(y, mo, d, 0, 0, 0);
+    return new Date(midnightFake + offsetMs).toISOString();
+  }
+
+  // Returns the YYYY-MM-DD for the calendar day after dateStr.
+  function addOneDayIso(dateStr) {
+    var p = dateStr.split('-');
+    return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] + 1)).toISOString().slice(0, 10);
+  }
+
+  // False only when both dates are set and from > to.
+  function dateRangeValid() {
+    return !state.dateFrom || !state.dateTo || state.dateFrom <= state.dateTo;
   }
 
   // Label shown in the plain-text input field.
@@ -289,7 +333,14 @@
     closeDd(false);
     if (value !== state.timezone) {
       state.timezone = value;
-      render(mount);     // re-render from cached items — no API refetch
+      if (state.dateFrom || state.dateTo) {
+        // Date filters are active — UTC boundaries change with timezone,
+        // so a fresh fetch is required.
+        state.skip = 0;
+        load(mount);
+      } else {
+        render(mount);   // no date filter — re-render from cached items
+      }
     } else {
       var inp = document.getElementById('pt-tz-input');
       if (inp) { inp.value = currentLabel(); }
@@ -309,11 +360,17 @@
   }
 
   function buildToolbar() {
+    var fromVal = state.dateFrom ? ' value="' + esc(state.dateFrom) + '"' : '';
+    var toVal   = state.dateTo   ? ' value="' + esc(state.dateTo)   + '"' : '';
     return (
       '<div class="pt-toolbar">' +
         '<span class="pt-toolbar-title">Publishing Timeline</span>' +
         '<label class="pt-lang-label" for="pt-lang-select">Language:</label>' +
         '<select class="pt-lang-select" id="pt-lang-select">' + buildLangOptions() + '</select>' +
+        '<label class="pt-date-label" for="pt-date-from">From:</label>' +
+        '<input class="pt-date-input" id="pt-date-from" type="date"' + fromVal + '>' +
+        '<label class="pt-date-label" for="pt-date-to">To:</label>' +
+        '<input class="pt-date-input" id="pt-date-to" type="date"' + toVal + '>' +
         '<label class="pt-tz-label" for="pt-tz-input">Timezone:</label>' +
         '<div class="pt-tz-combo" id="pt-tz-combo">' +
           '<input class="pt-tz-input" id="pt-tz-input" type="text"' +
@@ -327,6 +384,13 @@
 
   function render(mount) {
     var toolbar = buildToolbar();
+
+    if (!dateRangeValid()) {
+      mount.innerHTML = toolbar +
+        '<p class="pt-message pt-message--warn">From date must be on or before To date.</p>';
+      attachListeners(mount);
+      return;
+    }
 
     if (state.loading) {
       mount.innerHTML = toolbar + '<p class="pt-message">Loading…</p>';
@@ -397,6 +461,24 @@
         state.language = langSelect.value;
         state.skip     = 0;
         load(mount);
+      });
+    }
+
+    var dateFrom = document.getElementById('pt-date-from');
+    if (dateFrom) {
+      dateFrom.addEventListener('change', function () {
+        state.dateFrom = dateFrom.value;
+        state.skip     = 0;
+        if (dateRangeValid()) { load(mount); } else { render(mount); }
+      });
+    }
+
+    var dateTo = document.getElementById('pt-date-to');
+    if (dateTo) {
+      dateTo.addEventListener('change', function () {
+        state.dateTo = dateTo.value;
+        state.skip   = 0;
+        if (dateRangeValid()) { load(mount); } else { render(mount); }
       });
     }
 
@@ -483,6 +565,12 @@
     var url = API_PATH + '?skip=' + state.skip + '&take=' + state.take;
     if (state.language) {
       url += '&language=' + encodeURIComponent(state.language);
+    }
+    if (state.dateFrom) {
+      url += '&from=' + encodeURIComponent(localDayStartUtcIso(state.dateFrom, state.timezone));
+    }
+    if (state.dateTo) {
+      url += '&to=' + encodeURIComponent(localDayStartUtcIso(addOneDayIso(state.dateTo), state.timezone));
     }
 
     fetch(url, {

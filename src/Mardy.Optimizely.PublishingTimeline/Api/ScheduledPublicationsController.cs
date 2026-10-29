@@ -33,18 +33,25 @@ public sealed class ScheduledPublicationsController : ControllerBase
     /// <param name="skip">Number of items to skip (default 0).</param>
     /// <param name="take">Page size, clamped to [1, 100] (default 20).</param>
     /// <param name="language">Optional BCP-47 language code to filter by. Omit for all languages.</param>
+    /// <param name="from">Optional inclusive lower bound (UTC). Items scheduled before this are excluded.</param>
+    /// <param name="to">Optional exclusive upper bound (UTC). Items scheduled at or after this are excluded.</param>
     [HttpGet("scheduled")]
     [Produces("application/json")]
     public ActionResult<PagedResult<ScheduledPublicationDto>> GetScheduled(
-        [FromQuery] int skip = 0,
-        [FromQuery] int take = 20,
-        [FromQuery] string? language = null)
+        [FromQuery] int             skip     = 0,
+        [FromQuery] int             take     = 20,
+        [FromQuery] string?         language = null,
+        [FromQuery] DateTimeOffset? from     = null,
+        [FromQuery] DateTimeOffset? to       = null)
     {
         if (skip < 0) skip = 0;
         take = Math.Clamp(take, 1, 100);
         if (string.IsNullOrWhiteSpace(language)) language = null;
 
-        return Ok(_service.GetScheduled(skip, take, language));
+        return Ok(_service.GetScheduled(
+            skip, take, language,
+            from?.UtcDateTime,
+            to?.UtcDateTime));
     }
 
     /// <summary>
