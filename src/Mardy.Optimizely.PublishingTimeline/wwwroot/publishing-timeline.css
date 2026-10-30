@@ -278,11 +278,11 @@ body.pt-collapsed .pt-toolbar {
 }
 
 .pt-message--error {
-  color: #c0392b;
+  color: var(--fg-error, #c0392b);
 }
 
 .pt-message--warn {
-  color: #b44b00;
+  color: var(--fg-warning-strong, #b44b00);
 }
 
 /* ── Table ────────────────────────────────────────────────────────── */
@@ -359,6 +359,24 @@ body.pt-collapsed .pt-toolbar {
   color: var(--fg-link-default-hovered, #123810);
 }
 
+/* Content name in the table: same edit link as the Edit column, styled like the
+   native Workflow Status names (link colour, no underline, colour change on hover).
+   Unlike the native links, keyboard focus stays visible. */
+.pt-name-link {
+  color: var(--fg-link-default, #226b1e);
+  text-decoration: none;
+  transition: color var(--duration-md, 250ms);
+}
+
+.pt-name-link:hover {
+  color: var(--fg-link-default-hovered, #123810);
+}
+
+.pt-name-link:focus-visible {
+  outline: 2px solid var(--border-focus, #197a94);
+  outline-offset: 1px;
+}
+
 /* ── Pagination ───────────────────────────────────────────────────── */
 .pt-pagination {
   display: flex;
@@ -432,7 +450,7 @@ body.pt-collapsed .pt-toolbar {
   margin: 0;
   padding: 4px 12px;
   font-size: var(--font-size-sm, 0.75rem);
-  color: #b44b00; /* same as .pt-message--warn */
+  color: var(--fg-warning-strong, #b44b00); /* same as .pt-message--warn */
   flex-shrink: 0;
 }
 

@@ -812,7 +812,10 @@
     var rows = state.items.map(function (item) {
       return (
         '<tr class="pt-tr">' +
-          '<td class="pt-td pt-col--name">'     + esc(item.name)                               + '</td>' +
+          '<td class="pt-td pt-col--name">' +
+            '<a class="pt-name-link" href="' + esc(editUrl(item)) +
+            '" target="_blank" rel="noopener noreferrer">' + esc(item.name) + '</a>' +
+          '</td>' +
           '<td class="pt-td pt-col--language">' + esc(item.language)                           + '</td>' +
           '<td class="pt-td pt-col--date">'     + formatDate(item.scheduledAt, state.timezone)  + '</td>' +
           '<td class="pt-td pt-col--action pt-td--action">' +
