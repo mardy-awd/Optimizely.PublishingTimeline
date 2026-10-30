@@ -36,14 +36,16 @@
     <InternalsVisibleTo Include="Mardy.Optimizely.PublishingTimeline.Tests" />
   </ItemGroup>
 
-  <!-- Minimum supported CMS is 13.0.0; restore resolves the lowest version in the range,
-       so the build compiles against 13.0.0. Upper bound excludes the next major. -->
+  <!-- Minimum supported CMS is 13.4.0; restore resolves the lowest version in the range,
+       so the build compiles against 13.4.0. Upper bound excludes the next major.
+       13.4.0 is the first CMS 13 release whose dependencies restored without NuGet audit
+       warnings (October 2026); earlier 13.x pulls in SixLabors.ImageSharp 3.1.12. -->
   <ItemGroup>
     <!-- Content, versions, language branches, access checks, initialization module
          (EPiServer.Web.InitializationModule) and the episerver:cmsedit policy. -->
-    <PackageReference Include="EPiServer.Cms.AspNetCore" Version="[13.0.0, 14.0.0)" />
+    <PackageReference Include="EPiServer.Cms.AspNetCore" Version="[13.4.0, 14.0.0)" />
     <!-- CMS UI: the Dashboard the panel is injected into. -->
-    <PackageReference Include="EPiServer.CMS.UI.Core" Version="[13.0.0, 14.0.0)" />
+    <PackageReference Include="EPiServer.CMS.UI.Core" Version="[13.4.0, 14.0.0)" />
   </ItemGroup>
 
 </Project>

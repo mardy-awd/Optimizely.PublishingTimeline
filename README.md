@@ -54,13 +54,15 @@ Publishing Timeline uses the CMS's existing scheduled publication information. I
 
 ## Compatibility
 
-- **Optimizely CMS:** 13.0.0 or later (below 14.0.0)
+- **Optimizely CMS:** 13.4.0 or later (below 14.0.0)
 - **.NET:** 10
+
+13.4.0 is the minimum dependency version: the package is built against it. Earlier CMS 13 releases depend on SixLabors.ImageSharp 3.1.12, which has known vulnerabilities.
 
 Verification status:
 
-- **CMS 13.5.0:** the NuGet package is integration-tested in a clean CMS site; the Alloy sample site is tested with a project reference.
-- **CMS 13.0.0:** compilation verified, since the package is built against it; runtime testing is still pending.
+- **CMS 13.5.0:** runtime integration-tested. The NuGet package is tested in a clean CMS site; the Alloy sample site is tested with a project reference.
+- **CMS 13.4.0:** compilation verified; runtime testing is still pending.
 
 ## Installation
 
