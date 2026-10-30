@@ -1,0 +1,97 @@
+name: Build and Package
+
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore -p:ContinuousIntegrationBuild=true
+
+      # Runners use UTC as local time, which would hide Local-vs-UTC date bugs.
+      # America/New_York makes the server-side date filter tests meaningful.
+      - name: Test (C#)
+        run: dotnet test -c Release --no-build
+        env:
+          TZ: America/New_York
+
+      - name: Test (JavaScript)
+        run: node --test "tests/*.test.js"
+
+      - name: Pack NuGet
+        run: dotnet pack src/Mardy.Optimizely.PublishingTimeline/Mardy.Optimizely.PublishingTimeline.csproj -c Release --no-build -o ./artifacts
+
+      - name: Validate NuGet package
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+          $package = Get-ChildItem ./artifacts/*.nupkg | Select-Object -First 1
+
+          if (-not $package) {
+            throw "NuGet package was not generated."
+          }
+
+          if (-not (Get-ChildItem ./artifacts/*.snupkg)) {
+            throw "Symbols package was not generated."
+          }
+
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($package.FullName)
+
+          try {
+            $entries = $archive.Entries.FullName
+
+            $required = @(
+              "README.md",
+              "lib/net10.0/Mardy.Optimizely.PublishingTimeline.dll",
+              "staticwebassets/publishing-timeline.js",
+              "staticwebassets/publishing-timeline.css",
+              "build/Microsoft.AspNetCore.StaticWebAssets.props"
+            )
+
+            foreach ($path in $required) {
+              if ($path -notin $entries) {
+                throw "Missing NuGet package entry: $path"
+              }
+            }
+
+            Write-Host "NuGet package structure validated successfully."
+          }
+          finally {
+            $archive.Dispose()
+          }
+
+      - name: Upload NuGet artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: publishingtimeline-nuget
+          path: |
+            ./artifacts/*.nupkg
+            ./artifacts/*.snupkg
