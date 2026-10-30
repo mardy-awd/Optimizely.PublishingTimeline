@@ -339,10 +339,29 @@ body.pt-collapsed .pt-toolbar {
 }
 
 /* Column widths */
-.pt-col--name     { width: 40%; }
+.pt-col--name     { width: 34%; }
 .pt-col--language { width: 8%; }
-.pt-col--date     { width: 34%; }
+.pt-col--date     { width: 28%; }
+.pt-col--modified { width: 20%; }
 .pt-col--action   { width: 10%; }
+
+/* "Modified by" with no recorded user: muted dash (text alternative is hidden). */
+.pt-modified--none {
+  color: var(--fg-tertiary, #616755);
+}
+
+/* Readable by screen readers, not shown on screen. */
+.pt-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 .pt-td--action {
   padding-right: 1rem;

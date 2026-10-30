@@ -809,6 +809,20 @@
       return;
     }
 
+    // "Modified by": the version's savedBy username, as the native Workflow Status
+    // shows it. Long names are truncated by CSS; title keeps the full value on hover
+    // and the cell text stays complete for screen readers. A missing value shows a
+    // muted dash, with visually hidden "Not recorded" text for assistive technology.
+    function modifiedByCell(savedBy) {
+      if (!savedBy) {
+        return '<td class="pt-td pt-col--modified" title="Not recorded">' +
+          '<span class="pt-modified--none" aria-hidden="true">&#8212;</span>' +
+          '<span class="pt-visually-hidden">Not recorded</span></td>';
+      }
+      return '<td class="pt-td pt-col--modified" title="' + esc(savedBy) + '">' +
+        esc(savedBy) + '</td>';
+    }
+
     var rows = state.items.map(function (item) {
       return (
         '<tr class="pt-tr">' +
@@ -818,6 +832,7 @@
           '</td>' +
           '<td class="pt-td pt-col--language">' + esc(item.language)                           + '</td>' +
           '<td class="pt-td pt-col--date">'     + formatDate(item.scheduledAt, state.timezone)  + '</td>' +
+          modifiedByCell(item.savedBy) +
           '<td class="pt-td pt-col--action pt-td--action">' +
             '<a class="pt-link" href="' + esc(editUrl(item)) +
             '" target="_blank" rel="noopener noreferrer">Edit</a>' +
@@ -836,11 +851,13 @@
         '<table class="pt-table">' +
           '<colgroup>' +
             '<col class="pt-col--name"><col class="pt-col--language">' +
-            '<col class="pt-col--date"><col class="pt-col--action">' +
+            '<col class="pt-col--date"><col class="pt-col--modified">' +
+            '<col class="pt-col--action">' +
           '</colgroup>' +
           '<thead><tr>' +
             '<th class="pt-th">Name</th><th class="pt-th">Language</th>' +
-            '<th class="pt-th">Scheduled</th><th class="pt-th"></th>' +
+            '<th class="pt-th">Scheduled</th><th class="pt-th">Modified by</th>' +
+            '<th class="pt-th"></th>' +
           '</tr></thead>' +
           '<tbody>' + rows + '</tbody>' +
         '</table>' +
