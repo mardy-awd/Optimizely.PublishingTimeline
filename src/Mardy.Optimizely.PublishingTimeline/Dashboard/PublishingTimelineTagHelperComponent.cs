@@ -178,8 +178,8 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
                section keeps at least 200px. */
             --pt-panel-ratio: 0.5;
             --pt-panel-height: clamp(200px,
-              calc((100vh - var(--navigation-height) - 5px) * var(--pt-panel-ratio)),
-              calc(100vh - var(--navigation-height) - 5px - 200px));
+              calc((100vh - var(--navigation-height, 40px) - 5px) * var(--pt-panel-ratio)),
+              calc(100vh - var(--navigation-height, 40px) - 5px - 200px));
             /* Collapsed panel: 2px top border + the toolbar's title row. */
             --pt-collapsed-height: 40px;
           }
@@ -220,12 +220,14 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
           }
           /* Shrink the Dashboard content area to accommodate the drag handle (5px)
              and the panel; the three regions sum to 100vh − navigation-height.
+             --navigation-height falls back to 40px (CMS 13.4 doesn't define it and
+             hard-codes the same 40px).
              When hidden, no rule applies and the Dashboard keeps its native height. */
           body.pt-visible #root > div {
-            height: calc(100vh - var(--navigation-height) - var(--pt-panel-height) - 5px) !important;
+            height: calc(100vh - var(--navigation-height, 40px) - var(--pt-panel-height) - 5px);
           }
           body.pt-visible.pt-collapsed #root > div {
-            height: calc(100vh - var(--navigation-height) - var(--pt-collapsed-height)) !important;
+            height: calc(100vh - var(--navigation-height, 40px) - var(--pt-collapsed-height));
           }
         </style>
         <div id="pt-drag-handle"></div>
@@ -378,8 +380,9 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
           var HANDLE_PX = 5;     // must match the CSS height of #pt-drag-handle
 
           function availPx() {
+            // 40px fallback as in the CSS: CMS 13.4 doesn't define --navigation-height.
             var nav = parseFloat(getComputedStyle(document.documentElement)
-                        .getPropertyValue('--navigation-height')) || 0;
+                        .getPropertyValue('--navigation-height')) || 40;
             return window.innerHeight - nav - HANDLE_PX;
           }
 
