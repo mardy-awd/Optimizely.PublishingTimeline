@@ -4,8 +4,13 @@
   'use strict';
 
   var MOUNT_ID     = 'publishing-timeline-root';
-  var API_PATH     = '/publishingtimeline/api/scheduled';
-  var LANG_API     = '/publishingtimeline/api/languages';
+  // API base incl. the app's PathBase, rendered server-side on this <script> tag
+  // (data-api-base); currentScript is set while a deferred classic script runs.
+  var API_BASE     = (document.currentScript &&
+                      document.currentScript.getAttribute('data-api-base')) ||
+                     '/publishingtimeline/api';
+  var API_PATH     = API_BASE + '/scheduled';
+  var LANG_API     = API_BASE + '/languages';
   var PAGE_SIZE    = 10;
   var DD_PAGE_SIZE = 20;   // matches FilteringSelect pageSize in TimeZoneScheduleSelector.js
 

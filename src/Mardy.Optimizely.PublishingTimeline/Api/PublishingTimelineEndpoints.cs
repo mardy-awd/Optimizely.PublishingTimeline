@@ -23,10 +23,13 @@ namespace Mardy.Optimizely.PublishingTimeline.Api;
 /// </remarks>
 public sealed class PublishingTimelineEndpoints : IEndpointRoutingExtension
 {
+    /// <summary>API route prefix, relative to the application's PathBase.</summary>
+    internal const string BasePath = "/publishingtimeline/api";
+
     public void MapEndpoints(IEndpointRouteBuilder endpointRouteBuilder)
     {
         var api = endpointRouteBuilder
-            .MapGroup("/publishingtimeline/api")
+            .MapGroup(BasePath)
             .RequireAuthorization("episerver:cmsedit")
             // Answer 401/403 instead of redirecting to the login page, as the previous
             // [ApiController] did; fetch() would otherwise follow the redirect to HTML.

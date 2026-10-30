@@ -1,4 +1,5 @@
 using System.Net;
+using Mardy.Optimizely.PublishingTimeline.Api;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Razor.TagHelpers;
@@ -53,8 +54,12 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
         else if (string.Equals(output.TagName, "body", StringComparison.OrdinalIgnoreCase))
         {
             var jsUrl = VersionedAssetUrl(request, "publishing-timeline.js");
+            // API base including the app's PathBase (e.g. /mycms/publishingtimeline/api),
+            // read by the script via document.currentScript.
+            var apiBase = WebUtility.HtmlEncode(
+                request.PathBase.Add(PublishingTimelineEndpoints.BasePath).ToUriComponent());
             output.PostContent.AppendHtml(BodyHtml);
-            output.PostContent.AppendHtml($"""<script src="{jsUrl}" defer></script>""");
+            output.PostContent.AppendHtml($"""<script src="{jsUrl}" data-api-base="{apiBase}" defer></script>""");
         }
 
         return Task.CompletedTask;
@@ -70,7 +75,9 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
     // resolved, the URL is returned unversioned rather than failing the page.
     private static string VersionedAssetUrl(HttpRequest request, string fileName)
     {
-        var path = $"{AssetBase}/{fileName}";
+        // Include the app's PathBase (e.g. /mycms); AddFileVersionToPath strips it again
+        // only to locate the file, as the built-in script/link tag helpers do.
+        var path = request.PathBase.Add(new PathString($"{AssetBase}/{fileName}")).ToUriComponent();
         var versioned = path;
         try
         {
