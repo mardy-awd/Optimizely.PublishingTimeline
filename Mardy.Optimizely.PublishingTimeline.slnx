@@ -2,4 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Mardy.Optimizely.PublishingTimeline/Mardy.Optimizely.PublishingTimeline.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Mardy.Optimizely.PublishingTimeline.Tests/Mardy.Optimizely.PublishingTimeline.Tests.csproj" />
+  </Folder>
 </Solution>

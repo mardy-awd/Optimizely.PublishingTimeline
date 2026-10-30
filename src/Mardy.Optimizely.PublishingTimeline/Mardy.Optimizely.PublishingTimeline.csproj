@@ -32,6 +32,10 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Mardy.Optimizely.PublishingTimeline.Tests" />
+  </ItemGroup>
+
   <!-- Minimum supported CMS is 13.0.0; restore resolves the lowest version in the range,
        so the build compiles against 13.0.0. Upper bound excludes the next major. -->
   <ItemGroup>
