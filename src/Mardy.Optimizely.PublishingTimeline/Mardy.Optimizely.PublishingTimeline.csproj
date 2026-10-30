@@ -4,17 +4,42 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
   </PropertyGroup>
+
+  <!-- NuGet package metadata -->
+  <PropertyGroup>
+    <PackageId>Mardy.Optimizely.PublishingTimeline</PackageId>
+    <Version>1.0.0-beta.1</Version>
+    <Authors>mardy-awd</Authors>
+    <Copyright>Copyright (c) 2026 mardy-awd</Copyright>
+    <Description>Publishing Timeline for Optimizely CMS 13: shows scheduled publications in a table and monthly calendar below the CMS Dashboard, with language, date and timezone filters.</Description>
+    <PackageTags>optimizely;episerver;cms;cms13;dashboard;scheduled-publishing;calendar;addon</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/mardy-awd/Optimizely.PublishingTimeline</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/mardy-awd/Optimizely.PublishingTimeline.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <!-- Minimum supported CMS is 13.0.0; restore resolves the lowest version in the range,
+       so the build compiles against 13.0.0. Upper bound excludes the next major. -->
   <ItemGroup>
-    <PackageReference Include="EPiServer.Cms" Version="13.5.0" />
+    <!-- Content, versions, language branches, access checks, initialization module
+         (EPiServer.Web.InitializationModule) and the episerver:cmsedit policy. -->
+    <PackageReference Include="EPiServer.Cms.AspNetCore" Version="[13.0.0, 14.0.0)" />
+    <!-- CMS UI: the Dashboard the panel is injected into. -->
+    <PackageReference Include="EPiServer.CMS.UI.Core" Version="[13.0.0, 14.0.0)" />
   </ItemGroup>
-
-
 
 </Project>
