@@ -1,4 +1,5 @@
 using System.Net;
+using EPiServer.Shell;
 using Mardy.Optimizely.PublishingTimeline.Api;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
@@ -16,7 +17,8 @@ namespace Mardy.Optimizely.PublishingTimeline.Dashboard;
 /// Body injection: layout positioning rules, the empty mount div, the sidebar
 /// alignment script, and a deferred script tag for the panel JavaScript.
 ///
-/// Both injections are gated by IsDashboardRoute so no other CMS page is affected.
+/// Both injections are gated by IsDashboardRoute (the Dashboard path resolved through
+/// EPiServer.Shell.Paths) so no other page is affected.
 /// Static assets are served from /_content/Mardy.Optimizely.PublishingTimeline/
 /// by ASP.NET Core's built-in static web assets middleware (UseStaticFiles).
 ///
@@ -92,15 +94,35 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
         return WebUtility.HtmlEncode(versioned);
     }
 
-    // The CMS Dashboard path always ends with /Dashboard regardless of the configured
-    // module base URL (e.g. /EPi/CMS/Dashboard, /Optimizely/CMS/EPi/Dashboard).
-    // No other standard CMS shell route ends with this segment.
+    // Dashboard path as Optimizely resolves it from the CMS module and the configured
+    // protected root (e.g. /Optimizely/CMS/Dashboard). It excludes PathBase, like
+    // Request.Path. Cached once resolved; a failed resolution is retried next request.
+    private static string? _dashboardPath;
+
+    // True only for the CMS Dashboard: the resolved path, with or without a trailing
+    // slash or /Index. Fails closed (no injection) if the path can't be resolved.
     private static bool IsDashboardRoute(PathString path)
     {
+        var dashboard = _dashboardPath ??= ResolveDashboardPath();
+        if (dashboard is null) return false;
+
         var value = path.Value ?? string.Empty;
-        return value.EndsWith("/Dashboard", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/Dashboard/", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/Dashboard/Index", StringComparison.OrdinalIgnoreCase);
+        return value.Equals(dashboard, StringComparison.OrdinalIgnoreCase)
+            || value.Equals(dashboard + "/", StringComparison.OrdinalIgnoreCase)
+            || value.Equals(dashboard + "/Index", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? ResolveDashboardPath()
+    {
+        try
+        {
+            var resolved = Paths.ToResource("CMS", "Dashboard")?.TrimEnd('/');
+            return string.IsNullOrEmpty(resolved) ? null : resolved;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     // Injected into <head>: the panel stylesheet (versioned RCL static asset).
