@@ -130,33 +130,44 @@
 
   /* ── Date-range helpers ──────────────────────────────────────────── */
 
-  // Returns the ISO 8601 UTC string for local midnight on dateStr (YYYY-MM-DD) in tz.
-  // Uses noon UTC as the reference point so DST transitions around midnight cannot
-  // produce an incorrect offset for the day being queried.
-  function localDayStartUtcIso(dateStr, tz) {
-    var p   = dateStr.split('-');
-    var y = +p[0], mo = +p[1] - 1, d = +p[2];
-    // noon UTC on that calendar day — safely outside any DST spring-forward gap
-    var ref = new Date(Date.UTC(y, mo, d, 12, 0, 0));
-
+  // Returns tz's UTC offset in ms at instant t (local wall-clock time − UTC).
+  function zoneOffsetMs(t, tz) {
     var map = {};
     new Intl.DateTimeFormat('en-US', {
       timeZone: tz,
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
       hour12: false,
-    }).formatToParts(ref).forEach(function (pt) { map[pt.type] = pt.value; });
+    }).formatToParts(new Date(t)).forEach(function (pt) { map[pt.type] = pt.value; });
 
     var h = parseInt(map.hour === '24' ? '0' : map.hour, 10);
-    var localRefAsUtc = Date.UTC(
-      +map.year, +map.month - 1, +map.day,
-      h, +map.minute, +map.second
-    );
+    var localAsUtc = Date.UTC(+map.year, +map.month - 1, +map.day, h, +map.minute, +map.second);
+    return localAsUtc - Math.floor(t / 1000) * 1000;
+  }
 
-    // UTC_midnight = local_midnight_as_fake_UTC + (UTC_ref − local_ref_as_UTC)
-    var offsetMs     = ref.getTime() - localRefAsUtc;
-    var midnightFake = Date.UTC(y, mo, d, 0, 0, 0);
-    return new Date(midnightFake + offsetMs).toISOString();
+  // Returns the ISO 8601 UTC string for the first instant of the calendar day dateStr
+  // (YYYY-MM-DD) in tz — normally local midnight. Handles DST transitions on that day:
+  //   - the offset is resolved at midnight itself (fixed-point t = midnight − offset(t)),
+  //     not at another time of day;
+  //   - midnight skipped by a DST gap (e.g. Africa/Cairo, America/Santiago): the day
+  //     starts at the jump, the first valid instant;
+  //   - midnight occurring twice (fall-back at midnight): the earlier instant is used.
+  function localDayStartUtcIso(dateStr, tz) {
+    var p    = dateStr.split('-');
+    var wall = Date.UTC(+p[0], +p[1] - 1, +p[2]);   // local midnight as if it were UTC
+    var best = null;
+
+    // Start once from the offset a day before and once from a day after, so both
+    // sides of a transition are considered; keep the earliest valid candidate.
+    [wall - 86400000, wall + 86400000].forEach(function (seed) {
+      var t = wall - zoneOffsetMs(seed, tz);
+      for (var i = 0; i < 3; i++) { t = wall - zoneOffsetMs(t, tz); }
+      // Still on the previous local day → midnight fell in a gap; move to the jump.
+      if (t + zoneOffsetMs(t, tz) < wall) { t = wall - zoneOffsetMs(t, tz); }
+      if (best === null || t < best) { best = t; }
+    });
+
+    return new Date(best).toISOString();
   }
 
   // Returns the YYYY-MM-DD for the calendar day after dateStr.
