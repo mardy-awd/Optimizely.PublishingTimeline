@@ -12,7 +12,7 @@ Publishing Timeline extends this experience with **table and calendar views**, l
 - **Calendar view:** Visualize upcoming publications in a monthly calendar.
 - **Timezone switching:** View scheduled publishing times in different timezones without changing the actual publication schedule.
 - **Language filtering:** Focus on content scheduled for a specific language.
-- **Date filtering:** Narrow the schedule to a selected date range.
+- **Date filtering:** Narrow the schedule to a selected date range. From and To dates are whole days in the selected timezone, including days when daylight saving time starts or ends.
 - **Quick access:** Open scheduled content directly in the CMS editor.
 - **Flexible layout:** Expand, collapse, or resize the timeline within the Dashboard.
 - **Permission-aware results:** Scheduled content is subject to the current user's CMS access permissions.
@@ -54,30 +54,31 @@ Publishing Timeline uses the CMS's existing scheduled publication information. I
 
 ## Compatibility
 
-- **Optimizely CMS:** 13
+- **Optimizely CMS:** 13.0.0 or later (below 14.0.0)
 - **.NET:** 10
 
-Developed and tested against **Optimizely CMS 13.5.0**.
+Verification status:
 
-Compatibility with other CMS 13 versions has not yet been fully verified.
+- **CMS 13.5.0:** the NuGet package is integration-tested in a clean CMS site; the Alloy sample site is tested with a project reference.
+- **CMS 13.0.0:** compilation verified, since the package is built against it; runtime testing is still pending.
 
 ## Installation
 
-Publishing Timeline is intended to be distributed as a NuGet package for Optimizely CMS 13.
-
-Once published, install it into your CMS application using Visual Studio's NuGet Package Manager or the .NET CLI:
+Install the package into your CMS application with Visual Studio's NuGet Package Manager (include prereleases) or the .NET CLI:
 
 ```bash
-dotnet add package Mardy.Optimizely.PublishingTimeline
+dotnet add package Mardy.Optimizely.PublishingTimeline --version 1.0.0-beta.1
 ```
 
-After installation, build and run your CMS application, then navigate to:
+No configuration is required. You don't need to change `Program.cs` or `Startup.cs`: services, API endpoints and the Dashboard integration register automatically, and it works with the standard `endpoints.MapContent()` setup. Applications hosted under a sub-path (`PathBase`) are supported.
+
+Build and run your CMS application, then open:
 
 **CMS Dashboard → Workflow Status → Scheduled**
 
-The Publishing Timeline panel is designed to appear below the native Dashboard without replacing the existing Workflow Status gadget.
+The Publishing Timeline panel appears below the native Dashboard while the **Scheduled** tab is selected, and hides on the other tabs. The native Workflow Status gadget is left unchanged.
 
-**Current status:** NuGet packaging and installation testing are in progress. The package is not yet publicly available.
+The panel and its API are available to users with CMS editing access.
 
 ## Development
 
@@ -89,11 +90,10 @@ dotnet build -c Release
 
 ## Roadmap
 
-- Validate standalone NuGet installation in a clean CMS 13 application.
 - Verify timezone conversions, daylight saving transitions, and date filtering across timezones.
 - Expand functional and edge-case testing.
 - Test compatibility with additional CMS 13 versions.
-- Publish the first NuGet release.
+- Release a stable 1.0.0 version.
 
 ## License
 
