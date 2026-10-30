@@ -92,9 +92,8 @@ dotnet build -c Release
 
 ## Roadmap
 
-- Verify timezone conversions, daylight saving transitions, and date filtering across timezones.
+- Complete runtime testing on CMS 13.4.0 and test later CMS 13 releases.
 - Expand functional and edge-case testing.
-- Test compatibility with additional CMS 13 versions.
 - Release a stable 1.0.0 version.
 
 ## License
