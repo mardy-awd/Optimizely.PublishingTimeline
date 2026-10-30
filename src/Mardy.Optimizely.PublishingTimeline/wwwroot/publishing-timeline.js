@@ -75,7 +75,7 @@
   var _languages = [];   // populated from /api/languages before first render
 
   // Calendar view state — independent of table pagination state.
-  var cal = { items: [], loading: false, error: null };
+  var cal = { items: [], truncated: false, loading: false, error: null };
 
   var state = {
     skip:     0,
@@ -663,6 +663,10 @@
         '<button class="pt-btn" id="pt-cal-today">Today</button>' +
         '<button class="pt-btn" id="pt-cal-next">Next &#8594;</button>' +
       '</div>' +
+      (cal.truncated
+        ? '<p class="pt-cal-notice">Showing the first 1,000 scheduled items for this month. ' +
+          'Narrow the date range or select a language to see the rest.</p>'
+        : '') +
       '<div class="pt-cal-scroll">' +
         buildCalendarGrid(state.calYear, state.calMonth, cal.items, state.timezone) +
       '</div>';
@@ -670,9 +674,41 @@
     attachListeners(mount);
   }
 
+  // Fetches every page of a scheduled-API query (baseUrl has no skip/take) one after
+  // another, following hasMore, up to 1,000 items (10 pages of the API's max of 100).
+  // Items are de-duplicated by content/version, since content scheduled or published
+  // between requests can shift the pages. Resolves { items, truncated }, where truncated
+  // means the cap was reached and the API still reported more; rejects if any page fails.
+  function fetchAllPages(baseUrl, fetchPage) {
+    var PAGE_SIZE_MAX = 100;
+    var MAX_ITEMS     = 1000;
+    var items = [];
+    var seen  = {};
+
+    function page(skip) {
+      return fetchPage(baseUrl + '&skip=' + skip + '&take=' + PAGE_SIZE_MAX).then(function (data) {
+        var batch = data && Array.isArray(data.items) ? data.items : [];
+        for (var i = 0; i < batch.length; i++) {
+          var key = batch[i].contentId + '_' + batch[i].versionId;
+          if (!seen[key]) { seen[key] = true; items.push(batch[i]); }
+        }
+        var more = Boolean(data && data.hasMore) && batch.length > 0;
+        if (more && skip + PAGE_SIZE_MAX < MAX_ITEMS) { return page(skip + PAGE_SIZE_MAX); }
+        return { items: items, truncated: more };
+      });
+    }
+
+    return page(0);
+  }
+
+  // Increments on every calendar load; a response whose load is no longer the latest
+  // (month, filter or timezone changed, or the view switched) is discarded.
+  var calLoadId = 0;
+
   // Loads calendar items for the displayed month, intersected with any active
-  // From/To date filter.  Uses take=100 (API max) rather than table PAGE_SIZE.
+  // From/To date filter. Fetches all pages (see fetchAllPages) before rendering.
   function loadCalendar(mount) {
+    var loadId = ++calLoadId;
     if (!dateRangeValid()) { renderCalendar(mount); return; }
 
     closeCalPopup();
@@ -701,32 +737,41 @@
       if (dtUtc < effectiveTo) { effectiveTo = dtUtc; }
     }
 
-    var url = API_PATH + '?skip=0&take=100';
+    var url = API_PATH + '?from=' + encodeURIComponent(effectiveFrom) +
+      '&to=' + encodeURIComponent(effectiveTo);
     if (state.language) {
       url += '&language=' + encodeURIComponent(state.language);
     }
-    url += '&from=' + encodeURIComponent(effectiveFrom);
-    url += '&to='   + encodeURIComponent(effectiveTo);
 
-    fetch(url, {
-      credentials: 'same-origin',
-      headers: { 'X-Requested-With': 'XMLHttpRequest' },
-    })
-      .then(function (res) {
+    function fetchPage(pageUrl) {
+      return fetch(pageUrl, {
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      }).then(function (res) {
         if (res.status === 401 || res.status === 403) {
           throw new Error('Not authorised — please refresh and log in again.');
         }
         if (!res.ok) { throw new Error('Server returned ' + res.status); }
         return res.json();
-      })
-      .then(function (data) {
-        cal.items   = Array.isArray(data.items) ? data.items : [];
-        cal.loading = false;
+      });
+    }
+
+    function isCurrent() { return loadId === calLoadId && state.view === 'calendar'; }
+
+    fetchAllPages(url, fetchPage)
+      .then(function (result) {
+        if (!isCurrent()) { return; }
+        cal.items     = result.items;
+        cal.truncated = result.truncated;
+        cal.loading   = false;
         renderCalendar(mount);
       })
       .catch(function (err) {
-        cal.loading = false;
-        cal.error   = err.message;
+        if (!isCurrent()) { return; }
+        cal.items     = [];
+        cal.truncated = false;
+        cal.loading   = false;
+        cal.error     = err.message;
         renderCalendar(mount);
       });
   }

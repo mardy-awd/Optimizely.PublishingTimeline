@@ -427,6 +427,15 @@ body.pt-collapsed .pt-toolbar {
   flex-shrink: 0;
 }
 
+/* Shown only when the calendar hit its 1,000-item limit and more items exist. */
+.pt-cal-notice {
+  margin: 0;
+  padding: 4px 12px;
+  font-size: var(--font-size-sm, 0.75rem);
+  color: #b44b00; /* same as .pt-message--warn */
+  flex-shrink: 0;
+}
+
 .pt-cal-title {
   flex: 1;
   text-align: center;
