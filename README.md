@@ -8,11 +8,12 @@ Publishing Timeline extends this experience with **table and calendar views, lan
 
 ## Features
 
-- **Table view:** Browse scheduled publications with content names, languages, publishing dates, the user who last modified each version, and pagination.
+- **Table view:** Browse scheduled publications with content names, languages, publishing dates, a **Modified by** column showing the user who last modified each version, and pagination.
 - **Calendar view:** Visualize upcoming publications in a monthly calendar, with quick access to scheduled content.
 - **Timezone switching:** View scheduled publishing times in different timezones without changing the actual publication schedule.
 - **Language filtering:** Focus on content scheduled for a specific language.
 - **Date filtering:** Narrow the schedule to a selected date range. From and To dates cover whole days in the selected timezone, including daylight saving time transitions.
+- **Shared filters:** Language, date, and timezone filters apply to both views. Switching between Table and Calendar always shows results for the current filters.
 - **Quick access:** Open scheduled content directly in the CMS editor.
 - **Flexible layout:** Expand, collapse, or resize the timeline within the Dashboard.
 - **Permission-aware results:** Scheduled content is subject to the current user's CMS access permissions.
@@ -45,11 +46,11 @@ Publishing Timeline appears below the native CMS Dashboard when the **Scheduled*
 
 Editors can switch between two views:
 
-**Table view** provides a structured list of scheduled publications, including content names, languages, scheduled publishing times, and the user who last modified each version. Content names link directly to the CMS editor.
+**Table view** provides a structured list of scheduled publications, including content names, languages, scheduled publishing times, and a **Modified by** column with the user who last modified each version. Content names link directly to the CMS editor.
 
 **Calendar view** provides a monthly overview of upcoming publications, making it easier to see how publishing activity is distributed across different days. Editors can open scheduled content directly from calendar events.
 
-Both views display scheduled publishing times using the selected timezone.
+Both views display scheduled publishing times using the selected timezone and share the same language and date filters. Filter changes made in one view are reflected when switching to the other.
 
 The timeline can be collapsed, expanded, or resized without affecting the native Dashboard.
 
@@ -65,16 +66,16 @@ CMS 13.4.0 is the minimum supported dependency version. Earlier CMS 13 releases 
 ### Verification status
 
 - **CMS 13.5.0:** Runtime integration-tested. The NuGet package was installed in a clean CMS application, and the Alloy sample was tested with a project reference. Dashboard integration, API endpoints, table and calendar views, timezone handling, and sub-path hosting were verified.
-- **CMS 13.4.0:** Runtime testing has covered Dashboard integration and table/calendar behavior. A calendar text-color compatibility issue was identified and fixed. Final verification of the complete integration is in progress.
+- **CMS 13.4.0:** Runtime-tested with the NuGet package. Dashboard integration and table and calendar behavior were verified, including a CMS 13.4-specific link text-color fix.
 
 Additional CMS 13.x releases have not yet been individually verified.
 
 ## Installation
 
-Install the package using Visual Studio's NuGet Package Manager (enable **Include prerelease**) or the .NET CLI:
+Install the package using Visual Studio's NuGet Package Manager or the .NET CLI:
 
 ```bash
-dotnet add package Mardy.Optimizely.PublishingTimeline --version 1.0.0-beta.1
+dotnet add package Mardy.Optimizely.PublishingTimeline --version 1.0.0
 ```
 
 No additional configuration is required.
@@ -128,7 +129,7 @@ Run the JavaScript tests using Node.js:
 node --test "tests/*.test.js"
 ```
 
-The automated tests cover server-side scheduled-publication filtering, timezone and daylight saving time boundaries, and calendar pagination behavior.
+The automated tests cover server-side scheduled-publication filtering, timezone and daylight saving time boundaries, calendar pagination behavior, and keeping the table in sync with filters changed in the calendar.
 
 ### Create the NuGet package
 
@@ -156,10 +157,9 @@ The CI workflow runs on pushes to `main` and feature branches, as well as pull r
 
 ## Roadmap
 
-- Complete CMS 13.4 runtime verification and test additional CMS 13.x releases.
+- Verify new CMS 13.x releases as they become available.
 - Expand functional and edge-case testing.
 - Improve compatibility with future CMS updates.
-- Release a stable 1.0.0 version.
 
 ## License
 
