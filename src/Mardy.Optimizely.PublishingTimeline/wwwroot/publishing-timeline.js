@@ -88,6 +88,7 @@
     language: '',         // '' = all languages
     dateFrom: '',         // YYYY-MM-DD local calendar date, or ''
     dateTo:   '',         // YYYY-MM-DD local calendar date, or ''
+    tableKey: null,       // tableFilterKey() the table items were loaded for; null = none
     view:     'table',    // 'table' | 'calendar'
     calYear:  0,          // displayed calendar year, initialised in init()
     calMonth: 0,          // displayed calendar month (0-based), initialised in init()
@@ -179,6 +180,16 @@
   // False only when both dates are set and from > to.
   function dateRangeValid() {
     return !state.dateFrom || !state.dateTo || state.dateFrom <= state.dateTo;
+  }
+
+  // Identifies the filters behind the table's data: language plus the UTC date bounds.
+  // The bounds depend on the timezone, so a timezone change only counts while a date is set.
+  function tableFilterKey() {
+    return [
+      state.language,
+      state.dateFrom ? localDayStartUtcIso(state.dateFrom, state.timezone) : '',
+      state.dateTo ? localDayStartUtcIso(addOneDayIso(state.dateTo), state.timezone) : '',
+    ].join('|');
   }
 
   // Returns {year, month (0-based)} for the current moment in the given timezone.
@@ -398,12 +409,9 @@
       if (state.view === 'calendar') {
         // UTC month boundaries (and any date-filter bounds) change with timezone.
         loadCalendar(mount);
-      } else if (state.dateFrom || state.dateTo) {
-        // Date filters are active — UTC boundaries change with timezone.
-        state.skip = 0;
-        load(mount);
       } else {
-        render(mount);   // no date filter — re-render from cached items
+        // Reloads only if active date filters moved; otherwise re-renders cached items.
+        showTable(mount);
       }
     } else {
       var inp = document.getElementById('pt-tz-input');
@@ -882,7 +890,7 @@
     var tblBtn = document.getElementById('pt-view-table');
     if (tblBtn) {
       tblBtn.addEventListener('click', function () {
-        if (state.view !== 'table') { state.view = 'table'; render(mount); }
+        if (state.view !== 'table') { state.view = 'table'; showTable(mount); }
       });
     }
 
@@ -1043,7 +1051,24 @@
 
   /* ── Data fetching ───────────────────────────────────────────────── */
 
+  // Shows the table, reloading from page 1 if the filters changed since its items
+  // were loaded (e.g. while the calendar was shown); otherwise uses the cached page.
+  function showTable(mount) {
+    if (dateRangeValid() && state.tableKey !== tableFilterKey()) {
+      state.skip = 0;
+      load(mount);
+    } else {
+      render(mount);
+    }
+  }
+
+  // Increments on every table load; a response whose load is no longer the latest
+  // (filter or page changed meanwhile) is discarded.
+  var tableLoadId = 0;
+
   function load(mount) {
+    var loadId = ++tableLoadId;
+    var key    = tableFilterKey();
     state.loading = true;
     state.error   = null;
     render(mount);
@@ -1071,15 +1096,19 @@
         return res.json();
       })
       .then(function (data) {
-        state.items   = Array.isArray(data.items) ? data.items : [];
-        state.hasMore = Boolean(data.hasMore);
-        state.loading = false;
-        render(mount);
+        if (loadId !== tableLoadId) { return; }
+        state.items    = Array.isArray(data.items) ? data.items : [];
+        state.hasMore  = Boolean(data.hasMore);
+        state.loading  = false;
+        state.tableKey = key;
+        if (state.view === 'table') { render(mount); }
       })
       .catch(function (err) {
-        state.loading = false;
-        state.error   = err.message;
-        render(mount);
+        if (loadId !== tableLoadId) { return; }
+        state.loading  = false;
+        state.error    = err.message;
+        state.tableKey = null;   // retry when the table is shown again
+        if (state.view === 'table') { render(mount); }
       });
   }
 
