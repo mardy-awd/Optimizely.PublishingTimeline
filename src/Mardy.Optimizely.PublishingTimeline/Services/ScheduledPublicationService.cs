@@ -97,9 +97,7 @@ internal sealed class ScheduledPublicationService : IScheduledPublicationService
 
                 // Date-range filter: applied before TryGet to avoid loading content
                 // for items that fall outside the requested window.
-                var scheduledAt = version.DelayPublishUntil.Value;
-                if (from.HasValue && scheduledAt < from.Value) continue;
-                if (to.HasValue   && scheduledAt >= to.Value)  continue;
+                if (!IsWithinRange(version.DelayPublishUntil.Value, from, to)) continue;
 
                 // TryGet with a versioned ContentReference (WorkID > 0) loads the
                 // specific version regardless of language or publish status.
@@ -146,6 +144,23 @@ internal sealed class ScheduledPublicationService : IScheduledPublicationService
             Skip    = skip,
             Take    = take,
         };
+    }
+
+    /// <summary>
+    /// True if <paramref name="scheduledAt"/> lies in [<paramref name="fromUtc"/>, <paramref name="toUtc"/>).
+    /// </summary>
+    /// <remarks>
+    /// DelayPublishUntil comes back in server local time (DateTime.Kind Local), while the
+    /// bounds are UTC, and DateTime comparison ignores Kind. Normalising to UTC first keeps
+    /// the filter correct on servers that don't run in UTC. ToUniversalTime() converts
+    /// Local and Unspecified values (as local time) and leaves Utc values unchanged.
+    /// </remarks>
+    internal static bool IsWithinRange(DateTime scheduledAt, DateTime? fromUtc, DateTime? toUtc)
+    {
+        var scheduledUtc = scheduledAt.ToUniversalTime();
+        if (fromUtc.HasValue && scheduledUtc < fromUtc.Value) return false;
+        if (toUtc.HasValue   && scheduledUtc >= toUtc.Value)  return false;
+        return true;
     }
 
     private static ScheduledPublicationDto Map(EPiServer.DataAbstraction.ContentVersion v) =>

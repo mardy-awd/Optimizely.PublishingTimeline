@@ -1,4 +1,6 @@
 using System.Net;
+using EPiServer.Shell;
+using Mardy.Optimizely.PublishingTimeline.Api;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Razor.TagHelpers;
@@ -15,7 +17,8 @@ namespace Mardy.Optimizely.PublishingTimeline.Dashboard;
 /// Body injection: layout positioning rules, the empty mount div, the sidebar
 /// alignment script, and a deferred script tag for the panel JavaScript.
 ///
-/// Both injections are gated by IsDashboardRoute so no other CMS page is affected.
+/// Both injections are gated by IsDashboardRoute (the Dashboard path resolved through
+/// EPiServer.Shell.Paths) so no other page is affected.
 /// Static assets are served from /_content/Mardy.Optimizely.PublishingTimeline/
 /// by ASP.NET Core's built-in static web assets middleware (UseStaticFiles).
 ///
@@ -53,8 +56,12 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
         else if (string.Equals(output.TagName, "body", StringComparison.OrdinalIgnoreCase))
         {
             var jsUrl = VersionedAssetUrl(request, "publishing-timeline.js");
+            // API base including the app's PathBase (e.g. /mycms/publishingtimeline/api),
+            // read by the script via document.currentScript.
+            var apiBase = WebUtility.HtmlEncode(
+                request.PathBase.Add(PublishingTimelineEndpoints.BasePath).ToUriComponent());
             output.PostContent.AppendHtml(BodyHtml);
-            output.PostContent.AppendHtml($"""<script src="{jsUrl}" defer></script>""");
+            output.PostContent.AppendHtml($"""<script src="{jsUrl}" data-api-base="{apiBase}" defer></script>""");
         }
 
         return Task.CompletedTask;
@@ -70,7 +77,9 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
     // resolved, the URL is returned unversioned rather than failing the page.
     private static string VersionedAssetUrl(HttpRequest request, string fileName)
     {
-        var path = $"{AssetBase}/{fileName}";
+        // Include the app's PathBase (e.g. /mycms); AddFileVersionToPath strips it again
+        // only to locate the file, as the built-in script/link tag helpers do.
+        var path = request.PathBase.Add(new PathString($"{AssetBase}/{fileName}")).ToUriComponent();
         var versioned = path;
         try
         {
@@ -85,15 +94,35 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
         return WebUtility.HtmlEncode(versioned);
     }
 
-    // The CMS Dashboard path always ends with /Dashboard regardless of the configured
-    // module base URL (e.g. /EPi/CMS/Dashboard, /Optimizely/CMS/EPi/Dashboard).
-    // No other standard CMS shell route ends with this segment.
+    // Dashboard path as Optimizely resolves it from the CMS module and the configured
+    // protected root (e.g. /Optimizely/CMS/Dashboard). It excludes PathBase, like
+    // Request.Path. Cached once resolved; a failed resolution is retried next request.
+    private static string? _dashboardPath;
+
+    // True only for the CMS Dashboard: the resolved path, with or without a trailing
+    // slash or /Index. Fails closed (no injection) if the path can't be resolved.
     private static bool IsDashboardRoute(PathString path)
     {
+        var dashboard = _dashboardPath ??= ResolveDashboardPath();
+        if (dashboard is null) return false;
+
         var value = path.Value ?? string.Empty;
-        return value.EndsWith("/Dashboard", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/Dashboard/", StringComparison.OrdinalIgnoreCase)
-            || value.EndsWith("/Dashboard/Index", StringComparison.OrdinalIgnoreCase);
+        return value.Equals(dashboard, StringComparison.OrdinalIgnoreCase)
+            || value.Equals(dashboard + "/", StringComparison.OrdinalIgnoreCase)
+            || value.Equals(dashboard + "/Index", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? ResolveDashboardPath()
+    {
+        try
+        {
+            var resolved = Paths.ToResource("CMS", "Dashboard")?.TrimEnd('/');
+            return string.IsNullOrEmpty(resolved) ? null : resolved;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     // Injected into <head>: the panel stylesheet (versioned RCL static asset).
@@ -149,8 +178,8 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
                section keeps at least 200px. */
             --pt-panel-ratio: 0.5;
             --pt-panel-height: clamp(200px,
-              calc((100vh - var(--navigation-height) - 5px) * var(--pt-panel-ratio)),
-              calc(100vh - var(--navigation-height) - 5px - 200px));
+              calc((100vh - var(--navigation-height, 40px) - 5px) * var(--pt-panel-ratio)),
+              calc(100vh - var(--navigation-height, 40px) - 5px - 200px));
             /* Collapsed panel: 2px top border + the toolbar's title row. */
             --pt-collapsed-height: 40px;
           }
@@ -191,12 +220,14 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
           }
           /* Shrink the Dashboard content area to accommodate the drag handle (5px)
              and the panel; the three regions sum to 100vh − navigation-height.
+             --navigation-height falls back to 40px (CMS 13.4 doesn't define it and
+             hard-codes the same 40px).
              When hidden, no rule applies and the Dashboard keeps its native height. */
           body.pt-visible #root > div {
-            height: calc(100vh - var(--navigation-height) - var(--pt-panel-height) - 5px) !important;
+            height: calc(100vh - var(--navigation-height, 40px) - var(--pt-panel-height) - 5px);
           }
           body.pt-visible.pt-collapsed #root > div {
-            height: calc(100vh - var(--navigation-height) - var(--pt-collapsed-height)) !important;
+            height: calc(100vh - var(--navigation-height, 40px) - var(--pt-collapsed-height));
           }
         </style>
         <div id="pt-drag-handle"></div>
@@ -349,8 +380,9 @@ internal sealed class PublishingTimelineTagHelperComponent : TagHelperComponent
           var HANDLE_PX = 5;     // must match the CSS height of #pt-drag-handle
 
           function availPx() {
+            // 40px fallback as in the CSS: CMS 13.4 doesn't define --navigation-height.
             var nav = parseFloat(getComputedStyle(document.documentElement)
-                        .getPropertyValue('--navigation-height')) || 0;
+                        .getPropertyValue('--navigation-height')) || 40;
             return window.innerHeight - nav - HANDLE_PX;
           }
 

@@ -278,11 +278,11 @@ body.pt-collapsed .pt-toolbar {
 }
 
 .pt-message--error {
-  color: #c0392b;
+  color: var(--fg-error, #c0392b);
 }
 
 .pt-message--warn {
-  color: #b44b00;
+  color: var(--fg-warning-strong, #b44b00);
 }
 
 /* ── Table ────────────────────────────────────────────────────────── */
@@ -339,10 +339,29 @@ body.pt-collapsed .pt-toolbar {
 }
 
 /* Column widths */
-.pt-col--name     { width: 40%; }
+.pt-col--name     { width: 34%; }
 .pt-col--language { width: 8%; }
-.pt-col--date     { width: 34%; }
+.pt-col--date     { width: 28%; }
+.pt-col--modified { width: 20%; }
 .pt-col--action   { width: 10%; }
+
+/* "Modified by" with no recorded user: muted dash (text alternative is hidden). */
+.pt-modified--none {
+  color: var(--fg-tertiary, #616755);
+}
+
+/* Readable by screen readers, not shown on screen. */
+.pt-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 .pt-td--action {
   padding-right: 1rem;
@@ -356,6 +375,36 @@ body.pt-collapsed .pt-toolbar {
 
 .pt-link:hover {
   text-decoration: underline;
+  color: var(--fg-link-default-hovered, #123810);
+}
+
+/* Content name in the table: same edit link as the Edit column, styled like the
+   native Workflow Status names (link colour, no underline, colour change on hover).
+   Unlike the native links, keyboard focus stays visible. */
+.pt-name-link {
+  color: var(--fg-link-default, #226b1e);
+  text-decoration: none;
+  transition: color var(--duration-md, 250ms);
+}
+
+.pt-name-link:hover {
+  color: var(--fg-link-default-hovered, #123810);
+}
+
+.pt-name-link:focus-visible {
+  outline: 2px solid var(--border-focus, #197a94);
+  outline-offset: 1px;
+}
+
+/* CMS 13.4 Axiom colors a:visited/:active #0037ff (specificity 0,1,1), which beats
+   .pt-name-link; element + class + state (0,2,1) keeps our colors without !important. */
+a.pt-name-link:link,
+a.pt-name-link:visited {
+  color: var(--fg-link-default, #226b1e);
+}
+
+a.pt-name-link:hover,
+a.pt-name-link:active {
   color: var(--fg-link-default-hovered, #123810);
 }
 
@@ -424,6 +473,15 @@ body.pt-collapsed .pt-toolbar {
   padding: 4px 12px;
   border-bottom: 1px solid var(--border-default, #d8e4cb);
   background: var(--bg-page, #f9fcf8);
+  flex-shrink: 0;
+}
+
+/* Shown only when the calendar hit its 1,000-item limit and more items exist. */
+.pt-cal-notice {
+  margin: 0;
+  padding: 4px 12px;
+  font-size: var(--font-size-sm, 0.75rem);
+  color: var(--fg-warning-strong, #b44b00); /* same as .pt-message--warn */
   flex-shrink: 0;
 }
 
@@ -520,6 +578,16 @@ body.pt-collapsed .pt-toolbar {
   background: var(--blue-700, #01485e);
 }
 
+/* CMS 13.4 Axiom colors a:visited/:hover/:active #0037ff (specificity 0,1,1), which beats
+   .pt-cal-event; element + class + state (0,2,1) keeps the text white without !important. */
+a.pt-cal-event:link,
+a.pt-cal-event:visited,
+a.pt-cal-event:hover,
+a.pt-cal-event:active,
+a.pt-cal-event:focus-visible {
+  color: var(--fg-light, #fff);
+}
+
 /* ── Calendar day-overflow: "+N more" button ──────────────────────── */
 .pt-cal-more {
   display: block;
@@ -604,5 +672,16 @@ body.pt-collapsed .pt-toolbar {
 
 .pt-cal-popup-event:hover {
   background: var(--bg-default-hovered, #5f931f14);
+  color: var(--fg-link-default, #226b1e);
+}
+
+/* Same CMS 13.4 a:visited/:active override as .pt-cal-event above. */
+a.pt-cal-popup-event:link,
+a.pt-cal-popup-event:visited {
+  color: var(--fg-default, #202320);
+}
+
+a.pt-cal-popup-event:hover,
+a.pt-cal-popup-event:active {
   color: var(--fg-link-default, #226b1e);
 }

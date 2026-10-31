@@ -4,8 +4,13 @@
   'use strict';
 
   var MOUNT_ID     = 'publishing-timeline-root';
-  var API_PATH     = '/publishingtimeline/api/scheduled';
-  var LANG_API     = '/publishingtimeline/api/languages';
+  // API base incl. the app's PathBase, rendered server-side on this <script> tag
+  // (data-api-base); currentScript is set while a deferred classic script runs.
+  var API_BASE     = (document.currentScript &&
+                      document.currentScript.getAttribute('data-api-base')) ||
+                     '/publishingtimeline/api';
+  var API_PATH     = API_BASE + '/scheduled';
+  var LANG_API     = API_BASE + '/languages';
   var PAGE_SIZE    = 10;
   var DD_PAGE_SIZE = 20;   // matches FilteringSelect pageSize in TimeZoneScheduleSelector.js
 
@@ -70,7 +75,7 @@
   var _languages = [];   // populated from /api/languages before first render
 
   // Calendar view state — independent of table pagination state.
-  var cal = { items: [], loading: false, error: null };
+  var cal = { items: [], truncated: false, loading: false, error: null };
 
   var state = {
     skip:     0,
@@ -83,6 +88,7 @@
     language: '',         // '' = all languages
     dateFrom: '',         // YYYY-MM-DD local calendar date, or ''
     dateTo:   '',         // YYYY-MM-DD local calendar date, or ''
+    tableKey: null,       // tableFilterKey() the table items were loaded for; null = none
     view:     'table',    // 'table' | 'calendar'
     calYear:  0,          // displayed calendar year, initialised in init()
     calMonth: 0,          // displayed calendar month (0-based), initialised in init()
@@ -125,33 +131,44 @@
 
   /* ── Date-range helpers ──────────────────────────────────────────── */
 
-  // Returns the ISO 8601 UTC string for local midnight on dateStr (YYYY-MM-DD) in tz.
-  // Uses noon UTC as the reference point so DST transitions around midnight cannot
-  // produce an incorrect offset for the day being queried.
-  function localDayStartUtcIso(dateStr, tz) {
-    var p   = dateStr.split('-');
-    var y = +p[0], mo = +p[1] - 1, d = +p[2];
-    // noon UTC on that calendar day — safely outside any DST spring-forward gap
-    var ref = new Date(Date.UTC(y, mo, d, 12, 0, 0));
-
+  // Returns tz's UTC offset in ms at instant t (local wall-clock time − UTC).
+  function zoneOffsetMs(t, tz) {
     var map = {};
     new Intl.DateTimeFormat('en-US', {
       timeZone: tz,
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
       hour12: false,
-    }).formatToParts(ref).forEach(function (pt) { map[pt.type] = pt.value; });
+    }).formatToParts(new Date(t)).forEach(function (pt) { map[pt.type] = pt.value; });
 
     var h = parseInt(map.hour === '24' ? '0' : map.hour, 10);
-    var localRefAsUtc = Date.UTC(
-      +map.year, +map.month - 1, +map.day,
-      h, +map.minute, +map.second
-    );
+    var localAsUtc = Date.UTC(+map.year, +map.month - 1, +map.day, h, +map.minute, +map.second);
+    return localAsUtc - Math.floor(t / 1000) * 1000;
+  }
 
-    // UTC_midnight = local_midnight_as_fake_UTC + (UTC_ref − local_ref_as_UTC)
-    var offsetMs     = ref.getTime() - localRefAsUtc;
-    var midnightFake = Date.UTC(y, mo, d, 0, 0, 0);
-    return new Date(midnightFake + offsetMs).toISOString();
+  // Returns the ISO 8601 UTC string for the first instant of the calendar day dateStr
+  // (YYYY-MM-DD) in tz — normally local midnight. Handles DST transitions on that day:
+  //   - the offset is resolved at midnight itself (fixed-point t = midnight − offset(t)),
+  //     not at another time of day;
+  //   - midnight skipped by a DST gap (e.g. Africa/Cairo, America/Santiago): the day
+  //     starts at the jump, the first valid instant;
+  //   - midnight occurring twice (fall-back at midnight): the earlier instant is used.
+  function localDayStartUtcIso(dateStr, tz) {
+    var p    = dateStr.split('-');
+    var wall = Date.UTC(+p[0], +p[1] - 1, +p[2]);   // local midnight as if it were UTC
+    var best = null;
+
+    // Start once from the offset a day before and once from a day after, so both
+    // sides of a transition are considered; keep the earliest valid candidate.
+    [wall - 86400000, wall + 86400000].forEach(function (seed) {
+      var t = wall - zoneOffsetMs(seed, tz);
+      for (var i = 0; i < 3; i++) { t = wall - zoneOffsetMs(t, tz); }
+      // Still on the previous local day → midnight fell in a gap; move to the jump.
+      if (t + zoneOffsetMs(t, tz) < wall) { t = wall - zoneOffsetMs(t, tz); }
+      if (best === null || t < best) { best = t; }
+    });
+
+    return new Date(best).toISOString();
   }
 
   // Returns the YYYY-MM-DD for the calendar day after dateStr.
@@ -163,6 +180,16 @@
   // False only when both dates are set and from > to.
   function dateRangeValid() {
     return !state.dateFrom || !state.dateTo || state.dateFrom <= state.dateTo;
+  }
+
+  // Identifies the filters behind the table's data: language plus the UTC date bounds.
+  // The bounds depend on the timezone, so a timezone change only counts while a date is set.
+  function tableFilterKey() {
+    return [
+      state.language,
+      state.dateFrom ? localDayStartUtcIso(state.dateFrom, state.timezone) : '',
+      state.dateTo ? localDayStartUtcIso(addOneDayIso(state.dateTo), state.timezone) : '',
+    ].join('|');
   }
 
   // Returns {year, month (0-based)} for the current moment in the given timezone.
@@ -382,12 +409,9 @@
       if (state.view === 'calendar') {
         // UTC month boundaries (and any date-filter bounds) change with timezone.
         loadCalendar(mount);
-      } else if (state.dateFrom || state.dateTo) {
-        // Date filters are active — UTC boundaries change with timezone.
-        state.skip = 0;
-        load(mount);
       } else {
-        render(mount);   // no date filter — re-render from cached items
+        // Reloads only if active date filters moved; otherwise re-renders cached items.
+        showTable(mount);
       }
     } else {
       var inp = document.getElementById('pt-tz-input');
@@ -647,6 +671,10 @@
         '<button class="pt-btn" id="pt-cal-today">Today</button>' +
         '<button class="pt-btn" id="pt-cal-next">Next &#8594;</button>' +
       '</div>' +
+      (cal.truncated
+        ? '<p class="pt-cal-notice">Showing the first 1,000 scheduled items for this month. ' +
+          'Narrow the date range or select a language to see the rest.</p>'
+        : '') +
       '<div class="pt-cal-scroll">' +
         buildCalendarGrid(state.calYear, state.calMonth, cal.items, state.timezone) +
       '</div>';
@@ -654,9 +682,41 @@
     attachListeners(mount);
   }
 
+  // Fetches every page of a scheduled-API query (baseUrl has no skip/take) one after
+  // another, following hasMore, up to 1,000 items (10 pages of the API's max of 100).
+  // Items are de-duplicated by content/version, since content scheduled or published
+  // between requests can shift the pages. Resolves { items, truncated }, where truncated
+  // means the cap was reached and the API still reported more; rejects if any page fails.
+  function fetchAllPages(baseUrl, fetchPage) {
+    var PAGE_SIZE_MAX = 100;
+    var MAX_ITEMS     = 1000;
+    var items = [];
+    var seen  = {};
+
+    function page(skip) {
+      return fetchPage(baseUrl + '&skip=' + skip + '&take=' + PAGE_SIZE_MAX).then(function (data) {
+        var batch = data && Array.isArray(data.items) ? data.items : [];
+        for (var i = 0; i < batch.length; i++) {
+          var key = batch[i].contentId + '_' + batch[i].versionId;
+          if (!seen[key]) { seen[key] = true; items.push(batch[i]); }
+        }
+        var more = Boolean(data && data.hasMore) && batch.length > 0;
+        if (more && skip + PAGE_SIZE_MAX < MAX_ITEMS) { return page(skip + PAGE_SIZE_MAX); }
+        return { items: items, truncated: more };
+      });
+    }
+
+    return page(0);
+  }
+
+  // Increments on every calendar load; a response whose load is no longer the latest
+  // (month, filter or timezone changed, or the view switched) is discarded.
+  var calLoadId = 0;
+
   // Loads calendar items for the displayed month, intersected with any active
-  // From/To date filter.  Uses take=100 (API max) rather than table PAGE_SIZE.
+  // From/To date filter. Fetches all pages (see fetchAllPages) before rendering.
   function loadCalendar(mount) {
+    var loadId = ++calLoadId;
     if (!dateRangeValid()) { renderCalendar(mount); return; }
 
     closeCalPopup();
@@ -685,32 +745,41 @@
       if (dtUtc < effectiveTo) { effectiveTo = dtUtc; }
     }
 
-    var url = API_PATH + '?skip=0&take=100';
+    var url = API_PATH + '?from=' + encodeURIComponent(effectiveFrom) +
+      '&to=' + encodeURIComponent(effectiveTo);
     if (state.language) {
       url += '&language=' + encodeURIComponent(state.language);
     }
-    url += '&from=' + encodeURIComponent(effectiveFrom);
-    url += '&to='   + encodeURIComponent(effectiveTo);
 
-    fetch(url, {
-      credentials: 'same-origin',
-      headers: { 'X-Requested-With': 'XMLHttpRequest' },
-    })
-      .then(function (res) {
+    function fetchPage(pageUrl) {
+      return fetch(pageUrl, {
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      }).then(function (res) {
         if (res.status === 401 || res.status === 403) {
           throw new Error('Not authorised — please refresh and log in again.');
         }
         if (!res.ok) { throw new Error('Server returned ' + res.status); }
         return res.json();
-      })
-      .then(function (data) {
-        cal.items   = Array.isArray(data.items) ? data.items : [];
-        cal.loading = false;
+      });
+    }
+
+    function isCurrent() { return loadId === calLoadId && state.view === 'calendar'; }
+
+    fetchAllPages(url, fetchPage)
+      .then(function (result) {
+        if (!isCurrent()) { return; }
+        cal.items     = result.items;
+        cal.truncated = result.truncated;
+        cal.loading   = false;
         renderCalendar(mount);
       })
       .catch(function (err) {
-        cal.loading = false;
-        cal.error   = err.message;
+        if (!isCurrent()) { return; }
+        cal.items     = [];
+        cal.truncated = false;
+        cal.loading   = false;
+        cal.error     = err.message;
         renderCalendar(mount);
       });
   }
@@ -748,12 +817,30 @@
       return;
     }
 
+    // "Modified by": the version's savedBy username, as the native Workflow Status
+    // shows it. Long names are truncated by CSS; title keeps the full value on hover
+    // and the cell text stays complete for screen readers. A missing value shows a
+    // muted dash, with visually hidden "Not recorded" text for assistive technology.
+    function modifiedByCell(savedBy) {
+      if (!savedBy) {
+        return '<td class="pt-td pt-col--modified" title="Not recorded">' +
+          '<span class="pt-modified--none" aria-hidden="true">&#8212;</span>' +
+          '<span class="pt-visually-hidden">Not recorded</span></td>';
+      }
+      return '<td class="pt-td pt-col--modified" title="' + esc(savedBy) + '">' +
+        esc(savedBy) + '</td>';
+    }
+
     var rows = state.items.map(function (item) {
       return (
         '<tr class="pt-tr">' +
-          '<td class="pt-td pt-col--name">'     + esc(item.name)                               + '</td>' +
+          '<td class="pt-td pt-col--name">' +
+            '<a class="pt-name-link" href="' + esc(editUrl(item)) +
+            '" target="_blank" rel="noopener noreferrer">' + esc(item.name) + '</a>' +
+          '</td>' +
           '<td class="pt-td pt-col--language">' + esc(item.language)                           + '</td>' +
           '<td class="pt-td pt-col--date">'     + formatDate(item.scheduledAt, state.timezone)  + '</td>' +
+          modifiedByCell(item.savedBy) +
           '<td class="pt-td pt-col--action pt-td--action">' +
             '<a class="pt-link" href="' + esc(editUrl(item)) +
             '" target="_blank" rel="noopener noreferrer">Edit</a>' +
@@ -772,11 +859,13 @@
         '<table class="pt-table">' +
           '<colgroup>' +
             '<col class="pt-col--name"><col class="pt-col--language">' +
-            '<col class="pt-col--date"><col class="pt-col--action">' +
+            '<col class="pt-col--date"><col class="pt-col--modified">' +
+            '<col class="pt-col--action">' +
           '</colgroup>' +
           '<thead><tr>' +
             '<th class="pt-th">Name</th><th class="pt-th">Language</th>' +
-            '<th class="pt-th">Scheduled</th><th class="pt-th"></th>' +
+            '<th class="pt-th">Scheduled</th><th class="pt-th">Modified by</th>' +
+            '<th class="pt-th"></th>' +
           '</tr></thead>' +
           '<tbody>' + rows + '</tbody>' +
         '</table>' +
@@ -801,7 +890,7 @@
     var tblBtn = document.getElementById('pt-view-table');
     if (tblBtn) {
       tblBtn.addEventListener('click', function () {
-        if (state.view !== 'table') { state.view = 'table'; render(mount); }
+        if (state.view !== 'table') { state.view = 'table'; showTable(mount); }
       });
     }
 
@@ -962,7 +1051,24 @@
 
   /* ── Data fetching ───────────────────────────────────────────────── */
 
+  // Shows the table, reloading from page 1 if the filters changed since its items
+  // were loaded (e.g. while the calendar was shown); otherwise uses the cached page.
+  function showTable(mount) {
+    if (dateRangeValid() && state.tableKey !== tableFilterKey()) {
+      state.skip = 0;
+      load(mount);
+    } else {
+      render(mount);
+    }
+  }
+
+  // Increments on every table load; a response whose load is no longer the latest
+  // (filter or page changed meanwhile) is discarded.
+  var tableLoadId = 0;
+
   function load(mount) {
+    var loadId = ++tableLoadId;
+    var key    = tableFilterKey();
     state.loading = true;
     state.error   = null;
     render(mount);
@@ -990,15 +1096,19 @@
         return res.json();
       })
       .then(function (data) {
-        state.items   = Array.isArray(data.items) ? data.items : [];
-        state.hasMore = Boolean(data.hasMore);
-        state.loading = false;
-        render(mount);
+        if (loadId !== tableLoadId) { return; }
+        state.items    = Array.isArray(data.items) ? data.items : [];
+        state.hasMore  = Boolean(data.hasMore);
+        state.loading  = false;
+        state.tableKey = key;
+        if (state.view === 'table') { render(mount); }
       })
       .catch(function (err) {
-        state.loading = false;
-        state.error   = err.message;
-        render(mount);
+        if (loadId !== tableLoadId) { return; }
+        state.loading  = false;
+        state.error    = err.message;
+        state.tableKey = null;   // retry when the table is shown again
+        if (state.view === 'table') { render(mount); }
       });
   }
 
