@@ -72,6 +72,8 @@ Additional CMS 13.x releases have not yet been individually verified.
 
 ## Installation
 
+The package is published on the Optimizely NuGet feed (`https://api.nuget.optimizely.com/v3/index.json`), which Optimizely CMS projects already use for the CMS packages.
+
 Install the package using Visual Studio's NuGet Package Manager or the .NET CLI:
 
 ```bash
@@ -145,7 +147,7 @@ GitHub Actions automatically builds the project, runs the C# and JavaScript test
 
 The CI workflow runs on pushes to `main` and feature branches, as well as pull requests targeting `main`.
 
-**Packages are not automatically published to NuGet.org.**
+**CI does not publish packages.** Releases are published manually to the Optimizely NuGet feed.
 
 ## Known limitations
 
