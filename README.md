@@ -1,10 +1,31 @@
+
 # Publishing Timeline for Optimizely CMS 13
 
-**Publishing Timeline** is an open-source add-on for Optimizely CMS 13 that gives content editors a clearer overview of what's scheduled to go live and when.
+**Publishing Timeline** is a free, open-source add-on for Optimizely CMS 13 that gives content editors a clearer overview of what's scheduled to go live and when.
 
 The native CMS Dashboard includes a **Scheduled** tab within the **Workflow Status** gadget, but it provides limited information about upcoming publications. It doesn't offer a dedicated calendar view or flexible ways to explore publishing schedules.
 
 Publishing Timeline extends this experience with **table and calendar views, language and date filters, and timezone switching**, making it easier to review and plan upcoming content releases.
+
+**Current release:** [v1.0.0](https://github.com/mardy-awd/Optimizely.PublishingTimeline/releases/tag/v1.0.0)
+
+**NuGet package:** [Mardy.Optimizely.PublishingTimeline](https://nuget.optimizely.com/packages/mardy.optimizely.publishingtimeline/1.0.0)
+
+For an introduction with screenshots and examples, see the [Publishing Timeline article on Optimizely World](https://world.optimizely.com/blogs/mardy-abdelkareem/dates/2026/10/introducing-publishing-timeline-for-optimizely-cms-13/).
+
+## Screenshots
+
+### Table view
+
+Browse scheduled publications with content names, languages, publishing dates, the user who last modified each version, and direct links to the CMS editor.
+
+![Publishing Timeline table view](docs/images/publishing-timeline-table.jpg)
+
+### Calendar view
+
+Explore upcoming publications in a monthly calendar. When multiple items are scheduled for the same day, the **+N more** option opens a popup showing additional publications and their scheduled times.
+
+![Publishing Timeline calendar view](docs/images/publishing-timeline-calendar.jpg)
 
 ## Features
 
@@ -67,12 +88,17 @@ CMS 13.4.0 is the minimum supported dependency version. Earlier CMS 13 releases 
 
 - **CMS 13.5.0:** Runtime integration-tested. The NuGet package was installed in a clean CMS application, and the Alloy sample was tested with a project reference. Dashboard integration, API endpoints, table and calendar views, timezone handling, and sub-path hosting were verified.
 - **CMS 13.4.0:** Runtime-tested with the NuGet package. Dashboard integration and table and calendar behavior were verified, including a CMS 13.4-specific link text-color fix.
+- **Published package:** Version 1.0.0 was installed successfully from the Optimizely NuGet feed.
 
 Additional CMS 13.x releases have not yet been individually verified.
 
 ## Installation
 
-The package is published on the Optimizely NuGet feed (`https://api.nuget.optimizely.com/v3/index.json`), which Optimizely CMS projects already use for the CMS packages.
+Publishing Timeline v1.0.0 is available on the [Optimizely NuGet feed](https://nuget.optimizely.com/packages/mardy.optimizely.publishingtimeline/1.0.0).
+
+The NuGet package source is:
+
+`https://api.nuget.optimizely.com/v3/index.json`
 
 Install the package using Visual Studio's NuGet Package Manager or the .NET CLI:
 
@@ -80,7 +106,9 @@ Install the package using Visual Studio's NuGet Package Manager or the .NET CLI:
 dotnet add package Mardy.Optimizely.PublishingTimeline --version 1.0.0
 ```
 
-No additional configuration is required.
+Make sure the Optimizely NuGet feed is configured as a package source.
+
+No additional application configuration is required beyond the standard Optimizely CMS setup.
 
 You don't need to modify `Program.cs` or `Startup.cs`. The add-on registers its services, API endpoints, and Dashboard integration automatically, using the standard Optimizely CMS endpoint setup:
 
